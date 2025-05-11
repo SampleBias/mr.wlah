@@ -53,8 +53,8 @@ AUTH0_AUDIENCE=https://api.mrwlah.com
 AUTH0_CALLBACK_URL=http://localhost:3000/api/auth/callback
 
 # MongoDB Connection
-MONGODB_URI=mongodb://localhost:27017/mrwlah
-MONGODB_DATABASE=mrwlah
+MONGODB_URI=mongodb+srv://benchai.3cq4b8o.mongodb.net/?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority&appName=MrWlah
+MONGODB_DATABASE=benchai
 
 # Application Settings
 NODE_ENV=development
@@ -65,28 +65,72 @@ EOF
     echo ""
 fi
 
+# Create certs directory if it doesn't exist
+if [ ! -d "certs" ]; then
+    echo "Creating certs directory..."
+    mkdir -p certs
+fi
+
 # Check for MongoDB certificate
 CERT_PATH="certs/X509-cert-5870665680541743449.pem"
-if [ ! -f "$CERT_PATH" ] && [ -f "$CERT_PATH.sample" ]; then
+if [ ! -f "$CERT_PATH" ]; then
     echo ""
     echo "⚠️  MongoDB X.509 certificate not found!"
-    echo "If you're using X.509 authentication, please place your certificate at:"
+    echo "Please place your X.509 certificate at:"
     echo "   $CERT_PATH"
-    echo "A sample file is available at $CERT_PATH.sample"
+    echo ""
+    echo "For database access, you need to have a valid certificate."
+    read -p "Would you like to continue without the certificate? (y/n): " continue_without_cert
+    
+    if [[ "$continue_without_cert" != "y" && "$continue_without_cert" != "Y" ]]; then
+        echo "Exiting. Please add the certificate and run again."
+        exit 1
+    fi
+    
+    echo "Continuing without certificate. Database features will not work."
     echo ""
 fi
 
-# Initialize database
-echo "Initializing Mr. Wlah database..."
-python init_database.py
+# Update MongoDB connection settings
+echo "Updating MongoDB connection settings..."
+python update_env_for_benchai.py
 
-# Check if database initialization was successful
-if [ $? -ne 0 ]; then
-    echo "⚠️  Warning: Database initialization may have failed."
-    echo "The application will still start, but some features might not work correctly."
-    echo ""
+# Initialize BenchAI database for Mr. Wlah
+if [ -f "$CERT_PATH" ]; then
+    echo "Initializing BenchAI database for Mr. Wlah..."
+    python initialize_benchai_db.py
+    
+    # Check if database initialization was successful
+    if [ $? -ne 0 ]; then
+        echo "⚠️  Warning: BenchAI database initialization failed."
+        echo "The application will still start, but database features might not work correctly."
+        echo ""
+    else
+        echo "✅ BenchAI database initialized successfully!"
+        
+        # Verify logs collection
+        echo "Verifying logs collection..."
+        python check_logs.py > /dev/null
+        
+        if [ $? -ne 0 ]; then
+            echo "⚠️  Warning: Logs collection verification failed."
+        else
+            echo "✅ Logs collection verified!"
+        fi
+    fi
+else
+    # If no certificate, try to use local MongoDB (fallback)
+    echo "Initializing local database (fallback)..."
+    python init_database.py
+    
+    if [ $? -ne 0 ]; then
+        echo "⚠️  Warning: Local database initialization may have failed."
+        echo "The application will still start, but some features might not work correctly."
+        echo ""
+    fi
 fi
 
 # Start the application
+echo ""
 echo "Starting Mr. Wlah application..."
 python app.py 

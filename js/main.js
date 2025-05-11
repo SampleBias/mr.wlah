@@ -1,6 +1,7 @@
 // DOM Elements
 const fileInput = document.getElementById('file-input');
 const fileName = document.getElementById('file-name');
+const removeFileBtn = document.getElementById('remove-file-btn');
 const inputText = document.getElementById('input-text');
 const outputText = document.getElementById('output-text');
 const transformBtn = document.getElementById('transform-btn');
@@ -10,6 +11,8 @@ const downloadFormat = document.getElementById('download-format');
 const loginBtn = document.getElementById('login-btn');
 const loginModal = document.getElementById('login-modal');
 const closeButtons = document.querySelectorAll('.close');
+const clearInputBtn = document.getElementById('clear-input-btn');
+const clearOutputBtn = document.getElementById('clear-output-btn');
 
 // Gemini API configuration (loaded from config)
 let API_KEY, API_URL;
@@ -73,6 +76,8 @@ fileInput.addEventListener('change', async (e) => {
     if (!file) return;
     
     fileName.textContent = file.name;
+    // Show the remove file button
+    removeFileBtn.style.display = 'inline-block';
     
     try {
         let text;
@@ -95,6 +100,21 @@ fileInput.addEventListener('change', async (e) => {
     } catch (error) {
         console.error('Error reading file:', error);
         alert('Error reading file. Please try again.');
+    }
+});
+
+// Remove File Handling
+removeFileBtn.addEventListener('click', () => {
+    // Clear the file input
+    fileInput.value = '';
+    // Reset the file name display
+    fileName.textContent = 'No file selected';
+    // Hide the remove button
+    removeFileBtn.style.display = 'none';
+    // Clear the input text area if it contains file content
+    if (inputText.value && confirm('Do you want to clear the text that was loaded from the file?')) {
+        inputText.value = '';
+        inputText.focus();
     }
 });
 
@@ -298,6 +318,17 @@ function pixelWriteEffect(element, text, index = 0, speed = 30) {
         setTimeout(() => pixelWriteEffect(element, text, index + 1, speed), speed);
     }
 }
+
+// Clear input text
+clearInputBtn.addEventListener('click', () => {
+    inputText.value = '';
+    inputText.focus();
+});
+
+// Clear output text
+clearOutputBtn.addEventListener('click', () => {
+    outputText.textContent = '';
+});
 
 // Initialize when the DOM is loaded
 document.addEventListener('DOMContentLoaded', init); 

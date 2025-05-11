@@ -32,6 +32,7 @@
                         <label for="file-input" class="upload-btn">Upload File</label>
                         <input type="file" id="file-input" accept=".txt,.pdf,.doc,.docx" style="display:none;">
                         <span id="file-name">No file selected</span>
+                        <button id="remove-file-btn" class="remove-btn" style="display:none;">Remove</button>
                     </div>
                     
                     <div class="tone-selector">
@@ -48,16 +49,18 @@
                     </div>
                 </div>
                 
-                <div class="text-area">
+                <div class="text-area-container">
                     <textarea id="input-text" placeholder="Paste AI-generated text here..."></textarea>
+                    <button id="clear-input-btn" class="clear-btn" title="Clear input text">Clear</button>
                 </div>
                 
                 <button id="transform-btn" class="glow-btn">Transform Text</button>
             </section>
 
             <section class="output-section">
-                <div class="text-area">
+                <div class="text-area-container">
                     <div id="output-text" class="output"></div>
+                    <button id="clear-output-btn" class="clear-btn" title="Clear output text">Clear</button>
                 </div>
                 
                 <div class="action-buttons">

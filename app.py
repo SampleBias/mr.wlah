@@ -38,72 +38,62 @@ api_key = os.getenv('GEMINI_API_KEY')
 genai_client = genai.Client(api_key=api_key)
 model_name = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
 
-# Configure MongoDB
-mongo_uri = os.getenv('MONGODB_URI')
-mongo_db = os.getenv('MONGODB_DATABASE', 'mrwlah')
+# Configure MongoDB - explicitly set the MongoDB URI for BenchAI
+# This ensures we don't use any potentially incorrect values from .env
+MONGODB_URI = "mongodb+srv://benchai.3cq4b8o.mongodb.net/?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority&appName=MrWlah"
+mongo_db = os.getenv('MONGODB_DATABASE', 'benchai')
+
+# Initialize collections as None by default
+users_collection = None
+transformations_collection = None
+api_usage_collection = None
 
 # Check if X.509 certificate exists
 cert_path = os.path.join('certs', 'X509-cert-5870665680541743449.pem')
 has_certificate = os.path.exists(cert_path)
 
-if mongo_uri:
+# Connect to MongoDB if certificate exists
+if has_certificate:
     try:
-        # Connect to MongoDB with X.509 authentication
-        if has_certificate:
-            print(f"Using X.509 certificate at {cert_path}")
-            # Make sure the URI is in the correct format for X.509 authentication
-            if 'authMechanism=MONGODB-X509' not in mongo_uri:
-                # Replace or add authMechanism parameter
-                if '?' in mongo_uri:
-                    mongo_uri = re.sub(r'authMechanism=[^&]*', '', mongo_uri)
-                    if mongo_uri.endswith('&'):
-                        mongo_uri += 'authMechanism=MONGODB-X509'
-                    else:
-                        mongo_uri += '&authMechanism=MONGODB-X509'
-                else:
-                    mongo_uri += '?authMechanism=MONGODB-X509'
-            
-            # Set up MongoDB client with X.509 certificate
-            mongo_client = MongoClient(
-                mongo_uri,
-                tls=True,
-                tlsCertificateKeyFile=cert_path,
-                server_api=ServerApi('1')
-            )
-        else:
-            # Regular connection without X.509
-            mongo_client = MongoClient(mongo_uri, server_api=ServerApi('1'))
+        print(f"Connecting to BenchAI MongoDB...")
+        print(f"Using X.509 certificate at {cert_path}")
+        
+        # Set up MongoDB client with X.509 certificate
+        mongo_client = MongoClient(
+            MONGODB_URI,
+            tls=True,
+            tlsCertificateKeyFile=cert_path,
+            server_api=ServerApi('1')
+        )
         
         # Test connection
         mongo_client.admin.command('ping')
-        print("MongoDB connection successful")
-        add_system_log("MongoDB connection established successfully")
+        print("✅ MongoDB connection successful")
         
+        # Connect to the specified database
         db = mongo_client[mongo_db]
+        add_system_log(f"Connected to MongoDB database: {mongo_db}")
+        
+        # Set up collections
         users_collection = db['users']
         transformations_collection = db['transformations']
         api_usage_collection = db['apiUsage']
         
-        # Create logs collection if it doesn't exist
-        if 'logs' not in db.list_collection_names():
-            db.create_collection('logs')
-            db.logs.create_index([("timestamp", -1)])
-            db.logs.create_index([("level", 1)])
-            db.logs.create_index([("userId", 1)])
-            add_system_log("Logs collection created")
+        # Log connection success with database details
+        collections = db.list_collection_names()
+        add_system_log(f"Available collections: {', '.join(collections)}", "INFO")
+        
     except Exception as e:
         error_msg = f"MongoDB connection error: {str(e)}"
-        print(error_msg)
+        print(f"❌ {error_msg}")
         add_system_log(error_msg, "ERROR")
-        users_collection = None
-        transformations_collection = None
-        api_usage_collection = None
 else:
-    # For demo purposes
-    users_collection = None
-    transformations_collection = None
-    api_usage_collection = None
-    add_system_log("MongoDB connection not configured", "WARNING")
+    if not has_certificate:
+        print(f"⚠️ X.509 certificate not found at {cert_path}")
+        add_system_log(f"X.509 certificate not found at {cert_path}", "WARNING")
+    
+    print("Running in demo mode without database connection")
+    add_system_log("Running in demo mode without database connection", "WARNING")
 
 # Configure Auth0
 oauth = OAuth(app)
@@ -296,45 +286,62 @@ def transform_text():
             transformed_text = apply_font_style(transformed_text, font_info)
         
         # Log the transformation if MongoDB is configured and user is authenticated
-        if transformations_collection and user_id:
-            transformation = {
-                'userId': ObjectId(user_id),
-                'originalText': text,
-                'transformedText': transformed_text,
-                'tone': tone,
-                'fontStylePreserved': preserve_font,
-                'createdAt': datetime.datetime.now(),
-                'metadata': {
-                    'characterCount': len(text),
-                    'sourceType': 'file' if 'file' in request.files else 'paste',
-                    'modelUsed': model_name
+        if transformations_collection is not None and user_id:
+            try:
+                # Create the transformation record
+                transformation = {
+                    'userId': user_id,  # Store as string instead of ObjectId
+                    'originalText': text,
+                    'transformedText': transformed_text,
+                    'tone': tone,
+                    'fontStylePreserved': preserve_font,
+                    'createdAt': datetime.datetime.now(),
+                    'metadata': {
+                        'characterCount': len(text),
+                        'sourceType': 'file' if 'file' in request.files else 'paste',
+                        'modelUsed': model_name
+                    }
                 }
-            }
-            transformations_collection.insert_one(transformation)
+                
+                # Insert the transformation record
+                result = transformations_collection.insert_one(transformation)
+                
+                # Log successful storage
+                if result.inserted_id:
+                    add_system_log(f"Transformation record stored with ID: {result.inserted_id}", "INFO")
+            except Exception as db_error:
+                # Log the error but don't fail the request
+                add_system_log(f"Failed to store transformation: {str(db_error)}", "ERROR")
         
         return jsonify({'transformedText': transformed_text, 'fontInfo': font_info})
     
     except Exception as e:
-        print(f"Error: {str(e)}")
+        error_msg = f"Error transforming text: {str(e)}"
+        print(error_msg)
+        add_system_log(error_msg, "ERROR")
         return jsonify({'error': 'Failed to transform text'}), 500
 
 @app.route('/api/user/transformations', methods=['GET'])
 def get_user_transformations():
-    if not transformations_collection:
-        return jsonify({'error': 'MongoDB not configured'}), 500
+    if transformations_collection is None:
+        return jsonify({'error': 'MongoDB not configured', 'demo': True}), 200
     
     user_id = request.args.get('userId')
     if not user_id:
         return jsonify({'error': 'User ID required'}), 400
     
     try:
+        # Find transformations for this user
         transformations = list(transformations_collection.find(
-            {'userId': ObjectId(user_id)}
+            {'userId': user_id}  # Use string user_id directly
         ).sort('createdAt', -1).limit(10))
         
+        add_system_log(f"Retrieved {len(transformations)} transformations for user {user_id}", "INFO")
         return jsonify({'transformations': transformations})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        error_msg = f"Error retrieving transformations: {str(e)}"
+        add_system_log(error_msg, "ERROR")
+        return jsonify({'error': error_msg}), 500
 
 # Auth0 routes
 @app.route('/api/auth/login')
@@ -358,36 +365,43 @@ def callback():
         )
         
         # Store user in MongoDB if configured
-        if users_collection:
-            current_time = datetime.datetime.now()
-            
-            # Check if user exists
-            existing_user = users_collection.find_one({"auth0Id": user_info['sub']})
-            
-            users_collection.update_one(
-                {'auth0Id': user_info['sub']},
-                {'$set': {
-                    'email': user_info.get('email'),
-                    'name': user_info.get('name'),
-                    'lastLogin': current_time
-                }, '$setOnInsert': {
-                    'createdAt': current_time,
-                    'usageCount': 0,
-                    'preferences': {
-                        'defaultTone': 'casual',
-                        'saveHistory': True
-                    }
-                }},
-                upsert=True
-            )
-            
-            # Log whether this was a new user or returning user
-            if not existing_user:
-                add_system_log(f"New user created: {user_info.get('email')}")
-            else:
-                add_system_log(f"Returning user: {user_info.get('email')}")
+        if users_collection is not None:
+            try:
+                current_time = datetime.datetime.now()
+                
+                # Check if user exists
+                existing_user = users_collection.find_one({"auth0Id": user_info['sub']})
+                
+                # Update or insert user
+                users_collection.update_one(
+                    {'auth0Id': user_info['sub']},
+                    {'$set': {
+                        'email': user_info.get('email'),
+                        'name': user_info.get('name'),
+                        'lastLogin': current_time
+                    }, '$setOnInsert': {
+                        'createdAt': current_time,
+                        'usageCount': 0,
+                        'preferences': {
+                            'defaultTone': 'casual',
+                            'saveHistory': True
+                        }
+                    }},
+                    upsert=True
+                )
+                
+                # Log whether this was a new user or returning user
+                if not existing_user:
+                    add_system_log(f"New user created: {user_info.get('email')}", "INFO")
+                else:
+                    add_system_log(f"Returning user: {user_info.get('email')}", "INFO")
+            except Exception as db_error:
+                # Log the error but continue with login
+                add_system_log(f"Error storing user data: {str(db_error)}", "ERROR")
+        else:
+            add_system_log("User login successful, but user data not stored (MongoDB not configured)", "WARNING")
         
-        # In a real app, you would set a session or return a JWT
+        # Return user info
         return jsonify(user_info)
     except Exception as e:
         error_msg = f"Login error: {str(e)}"
@@ -405,14 +419,37 @@ def logout():
     return jsonify({'message': 'Logged out successfully'})
 
 if __name__ == '__main__':
-    app.jinja_env.auto_reload = True
-    app.config['TEMPLATES_AUTO_RELOAD'] = True
-    port = int(os.getenv('PORT', 3000))
-    debug_mode = os.getenv('NODE_ENV') == 'development'
-    
-    if debug_mode:
-        add_system_log(f"Starting Mr. Wlah application in DEBUG mode on port {port}")
-    else:
-        add_system_log(f"Starting Mr. Wlah application on port {port}")
+    try:
+        app.jinja_env.auto_reload = True
+        app.config['TEMPLATES_AUTO_RELOAD'] = True
         
-    app.run(host='0.0.0.0', port=port, debug=debug_mode) 
+        # Get port and environment from .env
+        port = int(os.getenv('PORT', 3000))
+        debug_mode = os.getenv('NODE_ENV') == 'development'
+        
+        # Log startup information
+        start_msg = f"Starting Mr. Wlah application on port {port}"
+        if debug_mode:
+            start_msg += " in DEBUG mode"
+        add_system_log(start_msg, "INFO")
+        
+        # Log database status
+        if users_collection is not None:
+            db_status = f"Connected to {mongo_db} database"
+            if transformations_collection is not None:
+                try:
+                    transform_count = transformations_collection.count_documents({})
+                    db_status += f" with {transform_count} transformations"
+                except Exception as e:
+                    db_status += f" (error counting transformations: {str(e)})"
+            add_system_log(db_status, "INFO")
+        else:
+            add_system_log("Running without database connection", "WARNING")
+        
+        # Start the Flask app
+        app.run(host='0.0.0.0', port=port, debug=debug_mode)
+    except Exception as e:
+        error_msg = f"Application startup error: {str(e)}"
+        print(f"❌ {error_msg}")
+        add_system_log(error_msg, "ERROR")
+        sys.exit(1) 
