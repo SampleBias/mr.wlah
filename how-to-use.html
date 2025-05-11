@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Use | Mr. Wlah</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
+    <style>
+        .how-to-use-page {
+            padding: 40px;
+            background-color: var(--dark-bg);
+            border: var(--pixel-border);
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        
+        .guide-section {
+            margin-bottom: 40px;
+        }
+        
+        .guide-section h2 {
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--primary-color);
+            padding-bottom: 10px;
+        }
+        
+        .step-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .step-card {
+            flex: 1;
+            min-width: 250px;
+            background-color: var(--light-bg);
+            border: 1px solid var(--primary-color);
+            padding: 20px;
+            border-radius: 4px;
+        }
+        
+        .step-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            color: var(--secondary-color);
+        }
+        
+        .step-number {
+            background-color: var(--primary-color);
+            color: var(--dark-bg);
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+        
+        .example {
+            background-color: var(--bg-color);
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
+        .tip {
+            margin-top: 20px;
+            padding: 10px;
+            border-left: 3px solid var(--success-color);
+            background-color: rgba(0, 240, 160, 0.1);
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: var(--text-color);
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid var(--primary-color);
+            transition: all 0.3s ease;
+        }
+        
+        .back-link:hover {
+            background-color: var(--primary-color);
+            color: var(--dark-bg);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>Mr. Wlah</h1>
+                <p class="tagline">Write Like A Human</p>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="#" id="login-btn">Login</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <div class="how-to-use-page">
+                <h1>How to Use Mr. Wlah</h1>
+                <p>Mr. Wlah (Write Like A Human) is a Flash-inspired web application that transforms AI-generated content into human-like text. Here's how to use it effectively:</p>
+                
+                <div class="guide-section">
+                    <h2>Getting Started</h2>
+                    <div class="step-container">
+                        <div class="step-card">
+                            <h3><span class="step-number">1</span> Input Your Text</h3>
+                            <p>You have two options for inputting text:</p>
+                            <ul>
+                                <li>Paste AI-generated text directly into the input area</li>
+                                <li>Upload a document (.txt, .pdf, or .doc file)</li>
+                            </ul>
+                            <div class="tip">
+                                <strong>Tip:</strong> For best results, use text that is grammatically correct but sounds too formal or robotic.
+                            </div>
+                        </div>
+                        
+                        <div class="step-card">
+                            <h3><span class="step-number">2</span> Select a Tone</h3>
+                            <p>Choose the desired tone for your transformed text:</p>
+                            <ul>
+                                <li><strong>Casual:</strong> Relaxed, everyday conversation style</li>
+                                <li><strong>Professional:</strong> Polished, business-appropriate tone</li>
+                                <li><strong>Scientific:</strong> Technical, research-oriented language</li>
+                                <li><strong>Educational:</strong> Clear, instructional style</li>
+                                <li><strong>Engaging:</strong> Captivating, attention-grabbing approach</li>
+                                <li><strong>Humorous:</strong> Light-hearted, witty tone</li>
+                                <li><strong>Storytelling:</strong> Narrative, immersive style</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="step-card">
+                            <h3><span class="step-number">3</span> Transform Your Text</h3>
+                            <p>Click the "Transform Text" button to process your content. The application will:</p>
+                            <ul>
+                                <li>Add personal experiences and anecdotes</li>
+                                <li>Vary sentence structure for natural flow</li>
+                                <li>Include colloquialisms and idioms</li>
+                                <li>Add rhetorical questions for engagement</li>
+                                <li>Maintain a consistent voice and tone</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="guide-section">
+                    <h2>Using the Transformed Text</h2>
+                    <div class="step-container">
+                        <div class="step-card">
+                            <h3><span class="step-number">4</span> Review and Edit</h3>
+                            <p>The transformed text appears in the output section. Read through it to ensure it meets your needs and make any necessary adjustments.</p>
+                        </div>
+                        
+                        <div class="step-card">
+                            <h3><span class="step-number">5</span> Copy or Download</h3>
+                            <p>Once satisfied with the results, you can:</p>
+                            <ul>
+                                <li>Click "Copy" to copy the text to your clipboard</li>
+                                <li>Click "Download" to save the text as a file in your preferred format (.txt, .doc, or .pdf)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="guide-section">
+                    <h2>Examples</h2>
+                    
+                    <h3>Before Transformation:</h3>
+                    <div class="example">The process of neural encoding is fundamental to understanding brain function. Neurons transform sensory inputs into electrical signals through a complex series of biochemical reactions.</div>
+                    
+                    <h3>After Transformation (Scientific Tone):</h3>
+                    <div class="example">Upon analysis of the available data, several patterns emerge. From my laboratory observations over the past decade, I've found that the process of neural encoding is indeed fundamental to understanding brain function. Isn't it fascinating how neurons transform sensory inputs into electrical signals? This happens through a complex series of biochemical reactions that I've spent countless hours documenting under various experimental conditions.</div>
+                    
+                    <h3>After Transformation (Casual Tone):</h3>
+                    <div class="example">Hey, I've been thinking about this quite a bit lately. You know how it goes, right? Sometimes you just can't help but wonder about the process of neural encoding. It's really the key to getting how our brains work. I remember watching neurons do their thing in lab - they take all these sensory inputs and somehow turn them into electrical signals through this wild chemistry experiment happening in our heads. Pretty cool stuff!</div>
+                </div>
+                
+                <div class="guide-section">
+                    <h2>Tips for Best Results</h2>
+                    <ul>
+                        <li>Use text that is at least a paragraph long for better context</li>
+                        <li>Select a tone that's appropriate for your target audience</li>
+                        <li>For technical content, the Scientific or Educational tone works best</li>
+                        <li>For marketing or blog content, try the Engaging or Storytelling tone</li>
+                        <li>Review the output and make minor adjustments as needed</li>
+                    </ul>
+                </div>
+                
+                <a href="index.html" class="back-link">← Back to Application</a>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div id="login-container">
+                <!-- Auth0 login will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; <span id="current-year"></span> Mr. Wlah | Powered by Google Gemini</p>
+    </footer>
+
+    <script>
+        // Set current year in footer
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+        
+        // Modal handling
+        const loginBtn = document.getElementById('login-btn');
+        const loginModal = document.getElementById('login-modal');
+        const closeButton = document.querySelector('.close');
+        
+        loginBtn.addEventListener('click', () => {
+            loginModal.style.display = 'block';
+        });
+        
+        closeButton.addEventListener('click', () => {
+            loginModal.style.display = 'none';
+        });
+        
+        window.addEventListener('click', (e) => {
+            if (e.target === loginModal) {
+                loginModal.style.display = 'none';
+            }
+        });
+    </script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+</body>
+</html> 

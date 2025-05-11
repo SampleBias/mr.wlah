@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mr. Wlah | Write Like A Human</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
+    <!-- Auth0 SDK -->
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>Mr. Wlah</h1>
+                <p class="tagline">Write Like A Human</p>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="how-to-use.html" id="how-to-use">How to Use</a></li>
+                    <li><a href="#" id="login-btn">Login</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <section class="input-section">
+                <div class="control-panel">
+                    <div class="file-upload">
+                        <label for="file-input" class="upload-btn">Upload File</label>
+                        <input type="file" id="file-input" accept=".txt,.pdf,.doc,.docx" style="display:none;">
+                        <span id="file-name">No file selected</span>
+                    </div>
+                    
+                    <div class="tone-selector">
+                        <label for="tone">Tone:</label>
+                        <select id="tone">
+                            <option value="casual">Casual</option>
+                            <option value="professional">Professional</option>
+                            <option value="scientific">Scientific</option>
+                            <option value="educational">Educational</option>
+                            <option value="engaging">Engaging</option>
+                            <option value="humorous">Humorous</option>
+                            <option value="storytelling">Storytelling</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="text-area">
+                    <textarea id="input-text" placeholder="Paste AI-generated text here..."></textarea>
+                </div>
+                
+                <button id="transform-btn" class="glow-btn">Transform Text</button>
+            </section>
+
+            <section class="output-section">
+                <div class="text-area">
+                    <div id="output-text" class="output"></div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button id="copy-btn" class="pixel-btn">Copy</button>
+                    <button id="download-btn" class="pixel-btn">Download</button>
+                    <select id="download-format">
+                        <option value="txt">.txt</option>
+                        <option value="doc">.doc</option>
+                        <option value="pdf">.pdf</option>
+                    </select>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div id="login-container">
+                <!-- Auth0 login will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; <span id="current-year"></span> Mr. Wlah | Powered by Google Gemini</p>
+    </footer>
+
+    <script>
+        // Set current year in footer
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+    </script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html> 
