@@ -13,6 +13,9 @@ const loginModal = document.getElementById('login-modal');
 const closeButtons = document.querySelectorAll('.close');
 const clearInputBtn = document.getElementById('clear-input-btn');
 const clearOutputBtn = document.getElementById('clear-output-btn');
+const docProcessingContainer = document.getElementById('doc-processing-container');
+const docProcessingProgress = document.querySelector('.doc-processing-progress');
+const docProcessingPercentage = document.querySelector('.doc-processing-percentage');
 
 // Gemini API configuration (loaded from config)
 let API_KEY, API_URL;
@@ -84,24 +87,145 @@ fileInput.addEventListener('change', async (e) => {
         
         if (file.type === 'text/plain') {
             text = await file.text();
+            inputText.value = text || '';
         } 
         else if (file.type === 'application/pdf') {
-            // In a real implementation, you would use a PDF parsing library
-            alert('PDF support would be implemented with a PDF parsing library');
-            return;
+            // Call the server to process PDF
+            await processFileOnServer(file);
         }
         else if (file.type.includes('word')) {
-            // In a real implementation, you would use a DOCX parsing library
-            alert('DOCX support would be implemented with a document parsing library');
-            return;
+            // Process Word document with our agent
+            await processWordDocument(file);
+        } else {
+            alert('Unsupported file format. Please upload a .txt, .doc, .docx, or .pdf file.');
         }
-        
-        inputText.value = text || '';
     } catch (error) {
         console.error('Error reading file:', error);
         alert('Error reading file. Please try again.');
     }
 });
+
+// Word Document Processing Agent
+async function processWordDocument(file) {
+    try {
+        // Show processing container
+        docProcessingContainer.classList.add('active');
+        docProcessingProgress.style.width = '0%';
+        docProcessingPercentage.textContent = '0%';
+        
+        // Start processing animation
+        const totalSteps = 5;
+        
+        // Step 1: Initialize
+        await updateProgress(1, totalSteps, 'Initializing document processing...');
+        
+        // Step 2: Reading file
+        await updateProgress(2, totalSteps, 'Reading document structure...');
+        
+        // Step 3: Extracting text
+        await updateProgress(3, totalSteps, 'Extracting document content...');
+        
+        // Step 4: Processing formatting
+        await updateProgress(4, totalSteps, 'Processing document formatting...');
+        
+        // Step 5: Finalizing
+        await updateProgress(5, totalSteps, 'Finalizing document extraction...');
+        
+        // Process the document on the server
+        const result = await processFileOnServer(file);
+        
+        // Complete
+        docProcessingProgress.style.width = '100%';
+        docProcessingPercentage.textContent = '100%';
+        
+        // Hide processing container after a short delay
+        setTimeout(() => {
+            docProcessingContainer.classList.remove('active');
+        }, 500);
+        
+        return result;
+    } catch (error) {
+        // Handle error gracefully
+        handleDocProcessingError(error.message || 'Error processing document');
+        throw error;
+    }
+}
+
+// Handle document processing errors
+function handleDocProcessingError(errorMessage) {
+    // Show error in processing container
+    docProcessingContainer.classList.add('active');
+    document.querySelector('.doc-processing-label').textContent = 'Error Processing Document';
+    document.querySelector('.doc-processing-label').style.color = 'var(--secondary-color)';
+    docProcessingPercentage.textContent = 'Failed';
+    docProcessingPercentage.style.color = 'var(--secondary-color)';
+    docProcessingProgress.style.width = '100%';
+    docProcessingProgress.style.backgroundColor = 'var(--secondary-color)';
+    
+    // Log the error
+    console.error('Document processing error:', errorMessage);
+    
+    // Hide error after a delay
+    setTimeout(() => {
+        // Reset styles
+        document.querySelector('.doc-processing-label').style.color = '';
+        docProcessingPercentage.style.color = '';
+        docProcessingProgress.style.backgroundColor = '';
+        
+        // Hide container
+        docProcessingContainer.classList.remove('active');
+    }, 3000);
+}
+
+// Update progress bar
+async function updateProgress(step, totalSteps, message) {
+    return new Promise(resolve => {
+        const percentage = Math.floor((step / totalSteps) * 100);
+        
+        // Update progress bar and percentage
+        docProcessingProgress.style.width = `${percentage}%`;
+        docProcessingPercentage.textContent = `${percentage}%`;
+        
+        // Update processing label
+        document.querySelector('.doc-processing-label').textContent = message;
+        
+        // Simulate processing time
+        setTimeout(resolve, 600);
+    });
+}
+
+// Process file on server
+async function processFileOnServer(file) {
+    // Create a FormData object to send the file
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/transform', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error('Server processing failed');
+        }
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Update input text with extracted content
+        inputText.value = data.originalText || '';
+        
+        return data.originalText;
+    } catch (error) {
+        console.error('Error processing file on server:', error);
+        alert('Error processing document. Please try again or use a different file.');
+        throw error;
+    }
+}
 
 // Remove File Handling
 removeFileBtn.addEventListener('click', () => {
@@ -111,6 +235,8 @@ removeFileBtn.addEventListener('click', () => {
     fileName.textContent = 'No file selected';
     // Hide the remove button
     removeFileBtn.style.display = 'none';
+    // Hide the document processing container
+    docProcessingContainer.classList.remove('active');
     // Clear the input text area if it contains file content
     if (inputText.value && confirm('Do you want to clear the text that was loaded from the file?')) {
         inputText.value = '';

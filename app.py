@@ -281,36 +281,57 @@ def serve_static(path):
 
 @app.route('/api/transform', methods=['POST'])
 def transform_text():
-    # Get request data
-    data = request.get_json() if request.is_json else {}
-    text = data.get('text', '')
-    tone = data.get('tone', 'casual')
-    user_id = data.get('userId')
-    preserve_font = data.get('preserveFont', True)
-    target_word_count = data.get('targetWordCount')
-    
-    # Log transformation request
-    if user_id:
-        log_details = {
-            "tone": tone,
-            "text_length": len(text),
-            "preserve_font": preserve_font,
-            "target_word_count": target_word_count
-        }
-        log_user_activity(user_id, "TRANSFORM_TEXT", log_details)
-    
-    if not text:
-        # Check if there's a file upload
-        if 'file' in request.files:
+    try:
+        # Check if this is a file upload from FormData
+        if request.files and 'file' in request.files:
             file = request.files['file']
             try:
+                # Extract text from the file
                 text = extract_text_from_file(file)
+                
+                # If we're just extracting text for display, return it
+                if request.form.get('extract_only') == 'true':
+                    return jsonify({'originalText': text})
+                
+                # Otherwise, set it for transformation below
+                tone = request.form.get('tone', 'casual')
+                preserve_font = request.form.get('preserveFont', 'true') == 'true'
+                target_word_count = request.form.get('targetWordCount')
+                if target_word_count:
+                    target_word_count = int(target_word_count)
+                user_id = request.form.get('userId')
             except Exception as e:
                 return jsonify({'error': f"Error processing file: {str(e)}"}), 400
         else:
-            return jsonify({'error': 'No text or file provided'}), 400
-    
-    try:
+            # Get request data from JSON
+            data = request.get_json() if request.is_json else {}
+            text = data.get('text', '')
+            tone = data.get('tone', 'casual')
+            user_id = data.get('userId')
+            preserve_font = data.get('preserveFont', True)
+            target_word_count = data.get('targetWordCount')
+            
+            if not text:
+                return jsonify({'error': 'No text or file provided'}), 400
+        
+        # Log transformation request
+        if user_id:
+            log_details = {
+                "tone": tone,
+                "text_length": len(text),
+                "preserve_font": preserve_font,
+                "target_word_count": target_word_count
+            }
+            log_user_activity(user_id, "TRANSFORM_TEXT", log_details)
+        
+        # If this is just a file upload without immediate transformation
+        if request.files and not request.form.get('transform', False):
+            # Return the extracted text without transformation
+            return jsonify({
+                'originalText': text,
+                'message': 'File processed successfully'
+            })
+        
         # Detect font style if preservation is requested
         font_info = detect_font_style(text) if preserve_font else {}
         
@@ -372,7 +393,7 @@ def transform_text():
                         'characterCount': len(text),
                         'wordCount': original_word_count,
                         'targetWordCount': target_word_count,
-                        'sourceType': 'file' if 'file' in request.files else 'paste',
+                        'sourceType': 'file' if request.files else 'paste',
                         'modelUsed': model_name
                     }
                 }
@@ -387,7 +408,11 @@ def transform_text():
                 # Log the error but don't fail the request
                 add_system_log(f"Failed to store transformation: {str(db_error)}", "ERROR")
         
-        return jsonify({'transformedText': transformed_text, 'fontInfo': font_info})
+        return jsonify({
+            'transformedText': transformed_text, 
+            'fontInfo': font_info,
+            'originalText': text
+        })
     
     except Exception as e:
         error_msg = f"Error transforming text: {str(e)}"
