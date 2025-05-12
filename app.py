@@ -249,15 +249,79 @@ def apply_font_style(text, font_info):
 def extract_text_from_file(file):
     if file.filename.endswith('.txt'):
         return file.read().decode('utf-8')
+    
     elif file.filename.endswith('.pdf'):
-        reader = PyPDF2.PdfReader(file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
-        return text
+        try:
+            # Enhanced PDF text extraction
+            reader = PyPDF2.PdfReader(file)
+            total_pages = len(reader.pages)
+            text = []
+            
+            # Extract text from each page with structure preservation
+            for i in range(total_pages):
+                page = reader.pages[i]
+                page_text = page.extract_text()
+                
+                # Basic structure preservation
+                if page_text:
+                    # Add page number for longer documents
+                    if total_pages > 1:
+                        text.append(f"--- Page {i+1} ---\n")
+                    
+                    # Clean up common PDF extraction issues
+                    lines = page_text.split('\n')
+                    cleaned_lines = []
+                    
+                    for line in lines:
+                        # Remove excessive spaces
+                        cleaned_line = re.sub(r'\s+', ' ', line).strip()
+                        if cleaned_line:
+                            cleaned_lines.append(cleaned_line)
+                    
+                    # Join with proper paragraph breaks
+                    text.append('\n'.join(cleaned_lines))
+                    
+                    # Add extra newline between pages
+                    if i < total_pages - 1:
+                        text.append("\n")
+            
+            return "\n".join(text)
+        except Exception as e:
+            add_system_log(f"PDF extraction error: {str(e)}", "ERROR")
+            # Fallback to basic extraction
+            reader = PyPDF2.PdfReader(file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+            return text
+            
     elif file.filename.endswith('.docx'):
-        doc = docx.Document(file)
-        return "\n".join([paragraph.text for paragraph in doc.paragraphs])
+        try:
+            # Enhanced DOCX text extraction
+            doc = docx.Document(file)
+            full_text = []
+            
+            # Process paragraphs with structure preservation
+            for para in doc.paragraphs:
+                if para.text.strip():
+                    full_text.append(para.text)
+            
+            # Get text from tables
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = []
+                    for cell in row.cells:
+                        if cell.text.strip():
+                            row_text.append(cell.text.strip())
+                    if row_text:
+                        full_text.append(" | ".join(row_text))
+            
+            return "\n\n".join(full_text)
+        except Exception as e:
+            add_system_log(f"DOCX extraction error: {str(e)}", "ERROR")
+            # Fallback to basic extraction
+            doc = docx.Document(file)
+            return "\n".join([paragraph.text for paragraph in doc.paragraphs])
     else:
         raise ValueError("Unsupported file format")
 
@@ -278,6 +342,25 @@ def index():
 @app.route('/<path:path>')
 def serve_static(path):
     return send_from_directory('.', path)
+
+@app.route('/api/document/status', methods=['GET'])
+def document_processing_status():
+    """Endpoint to check document processing status for large files"""
+    job_id = request.args.get('job_id')
+    
+    if not job_id:
+        return jsonify({
+            'status': 'error',
+            'message': 'No job ID provided'
+        }), 400
+    
+    # For simplicity, we'll just return a success status
+    # In a production app, you'd check a queue or database for the actual status
+    return jsonify({
+        'status': 'completed',
+        'job_id': job_id,
+        'progress': 100
+    })
 
 @app.route('/api/transform', methods=['POST'])
 def transform_text():

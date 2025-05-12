@@ -90,8 +90,8 @@ fileInput.addEventListener('change', async (e) => {
             inputText.value = text || '';
         } 
         else if (file.type === 'application/pdf') {
-            // Call the server to process PDF
-            await processFileOnServer(file);
+            // Process PDF document with our agent
+            await processPDFDocument(file);
         }
         else if (file.type.includes('word')) {
             // Process Word document with our agent
@@ -105,6 +105,57 @@ fileInput.addEventListener('change', async (e) => {
     }
 });
 
+// PDF Document Processing Agent
+async function processPDFDocument(file) {
+    try {
+        // Show processing container
+        docProcessingContainer.classList.add('active');
+        docProcessingProgress.style.width = '0%';
+        docProcessingPercentage.textContent = '0%';
+        
+        // Set the document type class for proper icon display
+        const processingLabel = document.querySelector('.doc-processing-label');
+        processingLabel.classList.remove('docx');
+        processingLabel.classList.add('pdf');
+        
+        // Start processing animation
+        const totalSteps = 5;
+        
+        // Step 1: Initialize
+        await updateProgress(1, totalSteps, 'Initializing PDF processing...');
+        
+        // Step 2: Reading file
+        await updateProgress(2, totalSteps, 'Reading PDF structure...');
+        
+        // Step 3: Extracting text
+        await updateProgress(3, totalSteps, 'Extracting PDF content...');
+        
+        // Step 4: Processing layout
+        await updateProgress(4, totalSteps, 'Analyzing PDF layout...');
+        
+        // Step 5: Finalizing
+        await updateProgress(5, totalSteps, 'Finalizing PDF extraction...');
+        
+        // Process the document on the server
+        const result = await processFileOnServer(file);
+        
+        // Complete
+        docProcessingProgress.style.width = '100%';
+        docProcessingPercentage.textContent = '100%';
+        
+        // Hide processing container after a short delay
+        setTimeout(() => {
+            docProcessingContainer.classList.remove('active');
+        }, 500);
+        
+        return result;
+    } catch (error) {
+        // Handle error gracefully
+        handleDocProcessingError(error.message || 'Error processing PDF');
+        throw error;
+    }
+}
+
 // Word Document Processing Agent
 async function processWordDocument(file) {
     try {
@@ -112,6 +163,11 @@ async function processWordDocument(file) {
         docProcessingContainer.classList.add('active');
         docProcessingProgress.style.width = '0%';
         docProcessingPercentage.textContent = '0%';
+        
+        // Set the document type class for proper icon display
+        const processingLabel = document.querySelector('.doc-processing-label');
+        processingLabel.classList.remove('pdf');
+        processingLabel.classList.add('docx');
         
         // Start processing animation
         const totalSteps = 5;
@@ -155,8 +211,13 @@ async function processWordDocument(file) {
 function handleDocProcessingError(errorMessage) {
     // Show error in processing container
     docProcessingContainer.classList.add('active');
-    document.querySelector('.doc-processing-label').textContent = 'Error Processing Document';
-    document.querySelector('.doc-processing-label').style.color = 'var(--secondary-color)';
+    const processingLabel = document.querySelector('.doc-processing-label');
+    processingLabel.textContent = 'Error Processing Document';
+    processingLabel.style.color = 'var(--secondary-color)';
+    
+    // Remove specific document type classes
+    processingLabel.classList.remove('pdf', 'docx');
+    
     docProcessingPercentage.textContent = 'Failed';
     docProcessingPercentage.style.color = 'var(--secondary-color)';
     docProcessingProgress.style.width = '100%';
@@ -168,7 +229,8 @@ function handleDocProcessingError(errorMessage) {
     // Hide error after a delay
     setTimeout(() => {
         // Reset styles
-        document.querySelector('.doc-processing-label').style.color = '';
+        processingLabel.style.color = '';
+        processingLabel.textContent = 'Processing Document';
         docProcessingPercentage.style.color = '';
         docProcessingProgress.style.backgroundColor = '';
         
