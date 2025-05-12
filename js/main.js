@@ -129,13 +129,16 @@ transformBtn.addEventListener('click', async () => {
         return;
     }
     
+    // Calculate original word count
+    const originalWordCount = text.split(/\s+/).filter(word => word.length > 0).length;
+    
     // Show loading state
     transformBtn.disabled = true;
     transformBtn.textContent = 'Transforming...';
     outputText.textContent = 'Applying humanizing transformations...';
     
     try {
-        const transformedText = await transformTextWithGemini(text, tone, preserveFont);
+        const transformedText = await transformTextWithGemini(text, tone, preserveFont, originalWordCount);
         
         // If transformed text has HTML content, use innerHTML, otherwise use textContent
         if (/<[a-z][\s\S]*>/i.test(transformedText)) {
@@ -153,7 +156,7 @@ transformBtn.addEventListener('click', async () => {
 });
 
 // Gemini API Call
-async function transformTextWithGemini(text, tone, preserveFont = true) {
+async function transformTextWithGemini(text, tone, preserveFont = true, targetWordCount = null) {
     // In a real implementation with a backend server, we would call the API endpoint
     try {
         const response = await fetch('/api/transform', {
@@ -164,7 +167,8 @@ async function transformTextWithGemini(text, tone, preserveFont = true) {
             body: JSON.stringify({
                 text,
                 tone,
-                preserveFont
+                preserveFont,
+                targetWordCount
             })
         });
         
@@ -173,14 +177,139 @@ async function transformTextWithGemini(text, tone, preserveFont = true) {
         }
         
         const data = await response.json();
-        return data.transformedText;
+        
+        // Clean the response on the client side as well, just in case
+        let transformedText = data.transformedText;
+        transformedText = cleanLLMResponse(transformedText);
+        
+        // Check if we need to adjust word count
+        if (targetWordCount) {
+            return ensureWordCount(transformedText, targetWordCount);
+        }
+        
+        return transformedText;
     } catch (error) {
         console.error('API error:', error);
         
         // Fallback to simulation if server is not available
         console.log('Falling back to simulated transformation');
-        return simulateTransformation(text, tone);
+        const simulated = simulateTransformation(text, tone);
+        
+        // Check if we need to adjust word count
+        if (targetWordCount) {
+            return ensureWordCount(simulated, targetWordCount);
+        }
+        
+        return simulated;
     }
+}
+
+// Clean LLM response to remove meta-text
+function cleanLLMResponse(text) {
+    // Common patterns for LLM meta-text
+    const prefacePatterns = [
+        /^(Here'?s|Here is|I'?ve|I have|Below is|The following is).*?:\s*\n+/i,
+        /^(Sure|Okay|Alright|Of course|I'd be happy to|I can|I will).*?:\s*\n+/i,
+        /^(I'?ve transformed|I'?ve rewritten|I'?ve humanized|I'?ve modified).*?:\s*\n+/i,
+        /^(Your text|The text|This content) (has been|is now).*?:\s*\n+/i,
+        /^(In|With|Using|Employing|Applying) a.*?tone.*?:\s*\n+/i,
+        /^(Transformed version|Human version|Human-like version|Rewritten version).*?:\s*\n+/i,
+    ];
+    
+    const concludingPatterns = [
+        /\n+\s*(I hope|Hope|Hopefully) (this|that|these|it).*?\.$/i,
+        /\n+\s*(Let me know|Feel free to|Please) (if|to|contact).*?\.$/i,
+        /\n+\s*(This|The text|This version|This rewrite) (should|now|has).*?\.$/i,
+        /\n+\s*(Is there|Do you|Would you|If you) (anything|like|need).*?\.$/i,
+        /\n+\s*(Thank you|Thanks) (for|and).*?\.$/i,
+    ];
+    
+    // Remove preface patterns
+    for (const pattern of prefacePatterns) {
+        text = text.replace(pattern, '');
+    }
+    
+    // Remove concluding patterns
+    for (const pattern of concludingPatterns) {
+        text = text.replace(pattern, '');
+    }
+    
+    // Remove any lingering whitespace
+    return text.trim();
+}
+
+// Function to ensure word count is within tolerance of target
+function ensureWordCount(text, targetWordCount, tolerance = 100) {
+    const words = text.split(/\s+/).filter(word => word.length > 0);
+    const currentWordCount = words.length;
+    
+    // If already within tolerance, return as is
+    if (Math.abs(currentWordCount - targetWordCount) <= tolerance) {
+        return text;
+    }
+    
+    if (currentWordCount > targetWordCount + tolerance) {
+        // Text is too long, truncate
+        const truncatedWords = words.slice(0, targetWordCount + tolerance);
+        // Add an ellipsis to the last sentence
+        let result = truncatedWords.join(' ');
+        // Make sure we end with proper punctuation
+        if (!result.endsWith('.') && !result.endsWith('!') && !result.endsWith('?')) {
+            result += '.';
+        }
+        return result;
+    } else if (currentWordCount < targetWordCount - tolerance) {
+        // Text is too short, pad with filler
+        const fillersPerTone = {
+            casual: [
+                "I might be missing something here, but that's my take on it.",
+                "I've been thinking about this quite a bit lately.",
+                "There's probably more to say, but those are my thoughts for now.",
+                "I hope that makes sense to you too.",
+                "Let me know if you want me to elaborate on any of this."
+            ],
+            professional: [
+                "Additional considerations may apply depending on specific contexts.",
+                "Further analysis could provide more detailed insights.",
+                "These observations are based on available information and professional judgment.",
+                "I'd be happy to discuss any aspects of this in more detail if needed.",
+                "This analysis represents current understanding and may evolve with new information."
+            ],
+            scientific: [
+                "Further research would be beneficial to validate these preliminary findings.",
+                "The limitations of current methodologies should be acknowledged.",
+                "Statistical significance would need to be established through controlled studies.",
+                "These observations align with existing literature in the field.",
+                "Peer review would be necessary to confirm these interpretations."
+            ],
+            educational: [
+                "This concept connects to several other important principles worth exploring.",
+                "Students often find practical applications helpful for reinforcing these ideas.",
+                "Consider how these concepts build on previously established knowledge.",
+                "Various learning approaches might be useful for different aspects of this topic.",
+                "Reflection questions can help deepen understanding of these principles."
+            ]
+        };
+        
+        // Get fillers for specified tone or use casual as default
+        const fillers = fillersPerTone[tone] || fillersPerTone.casual;
+        
+        // Calculate how many fillers we need
+        const wordsToAdd = targetWordCount - tolerance - currentWordCount;
+        let fillerWords = 0;
+        let result = text;
+        
+        // Add fillers until we reach the target range
+        while (fillerWords < wordsToAdd) {
+            const randomFiller = fillers[Math.floor(Math.random() * fillers.length)];
+            result += " " + randomFiller;
+            fillerWords += randomFiller.split(/\s+/).length;
+        }
+        
+        return result;
+    }
+    
+    return text;
 }
 
 // Simulate transformation (for demo when backend is unavailable)

@@ -249,6 +249,7 @@ select {
 .text-area-container .output {
     width: 100%;
     min-height: 200px;
+    max-height: 400px;
     padding: 15px;
     background-color: var(--light-bg);
     border: 1px solid var(--primary-color);
@@ -257,6 +258,14 @@ select {
     font-size: 1.1rem;
     resize: vertical;
     transition: all 0.3s ease;
+}
+
+/* Make output area scrollable */
+.text-area-container .output {
+    overflow-y: auto;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    resize: none;
 }
 
 /* Buttons */

@@ -109,6 +109,53 @@ auth0 = oauth.register(
     },
 )
 
+# Helper function to clean LLM output
+def clean_llm_response(text):
+    """
+    Removes common LLM prefacing and concluding meta-text from responses
+    to provide only the usable transformed content.
+    """
+    # List of common prefacing patterns to remove
+    prefacing_patterns = [
+        r"^(Here'?s|Here is|I'?ve|I have|Below is|The following is).*?:\s*\n+",
+        r"^(Sure|Okay|Alright|Of course|I'd be happy to|I can|I will).*?:\s*\n+",
+        r"^(I'?ve transformed|I'?ve rewritten|I'?ve humanized|I'?ve modified).*?:\s*\n+",
+        r"^(Your text|The text|This content) (has been|is now).*?:\s*\n+",
+        r"^(In|With|Using|Employing|Applying) a.*?tone.*?:\s*\n+",
+        r"^(As requested|As per your request|Based on your request).*?:\s*\n+",
+        r"^(This is|Now the text is|Now it sounds) (more|much more|significantly).*?:\s*\n+",
+        r"^(I've kept|While maintaining|Maintaining|I've maintained).*?:\s*\n+",
+        r"^(Using|Incorporating|Adding|With) (personal|my own|human).*?:\s*\n+",
+        r"^(Transformed version|Human version|Human-like version|Rewritten version).*?:\s*\n+",
+    ]
+    
+    # List of common concluding patterns to remove
+    concluding_patterns = [
+        r"\n+\s*(I hope|Hope|Hopefully) (this|that|these|it).*?\.$",
+        r"\n+\s*(Let me know|Feel free to|Please) (if|to|contact).*?\.$",
+        r"\n+\s*(This|The text|This version|This rewrite) (should|now|has).*?\.$",
+        r"\n+\s*(Is there|Do you|Would you|If you) (anything|like|need).*?\.$",
+        r"\n+\s*(Thank you|Thanks) (for|and).*?\.$",
+        r"\n+\s*(How'?s that|How does that sound|Does this work|What do you think).*?\.$",
+        r"\n+\s*(I'?ve tried|I tried|I'?ve attempted) (to|my best).*?\.$",
+        r"\n+\s*(I'?ve maintained|I maintained|I'?ve preserved) (the|your|original).*?\.$",
+        r"\n+\s*(The word count|This keeps|I'?ve kept) (is|the|within).*?\.$",
+        r"\n+\s*(This|The above|The text above) (maintains|keeps|preserves).*?\.$",
+    ]
+    
+    # Apply all prefacing patterns
+    for pattern in prefacing_patterns:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Apply all concluding patterns
+    for pattern in concluding_patterns:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Remove any leading or trailing whitespace
+    text = text.strip()
+    
+    return text
+
 # Font style detection and preservation
 def detect_font_style(text):
     """Detect font style markers in HTML or common text formatting"""
@@ -240,13 +287,15 @@ def transform_text():
     tone = data.get('tone', 'casual')
     user_id = data.get('userId')
     preserve_font = data.get('preserveFont', True)
+    target_word_count = data.get('targetWordCount')
     
     # Log transformation request
     if user_id:
         log_details = {
             "tone": tone,
             "text_length": len(text),
-            "preserve_font": preserve_font
+            "preserve_font": preserve_font,
+            "target_word_count": target_word_count
         }
         log_user_activity(user_id, "TRANSFORM_TEXT", log_details)
     
@@ -265,13 +314,33 @@ def transform_text():
         # Detect font style if preservation is requested
         font_info = detect_font_style(text) if preserve_font else {}
         
-        # Create prompt for Gemini
-        prompt = f"""Rewrite the following text to sound more human. 
-                   Add personal experiences, vary sentence structure, 
-                   use colloquialisms, and make it engaging.
-                   Use a {tone} tone.
-                   
-                   Text to transform: {text}"""
+        # Calculate original word count if target requested
+        original_word_count = len(text.split()) if target_word_count else None
+        
+        # Create prompt for Gemini, including word count constraint if specified
+        if target_word_count:
+            prompt = f"""Rewrite the following text to sound more human. 
+                     Add personal experiences, vary sentence structure, 
+                     use colloquialisms, and make it engaging.
+                     Use a {tone} tone.
+                     
+                     IMPORTANT: The output must be approximately {target_word_count} words (±100 words).
+                     Current word count is approximately {original_word_count} words.
+                     
+                     IMPORTANT: Do not include any introductory phrases like "Here's your transformed text:" 
+                     or concluding phrases like "I hope this helps!". Just provide the transformed content directly.
+                     
+                     Text to transform: {text}"""
+        else:
+            prompt = f"""Rewrite the following text to sound more human. 
+                     Add personal experiences, vary sentence structure, 
+                     use colloquialisms, and make it engaging.
+                     Use a {tone} tone.
+                     
+                     IMPORTANT: Do not include any introductory phrases like "Here's your transformed text:" 
+                     or concluding phrases like "I hope this helps!". Just provide the transformed content directly.
+                     
+                     Text to transform: {text}"""
         
         # Call Gemini API with new client pattern
         response = genai_client.models.generate_content(
@@ -280,6 +349,9 @@ def transform_text():
         )
         
         transformed_text = response.text
+        
+        # Clean the LLM response to remove any prefacing or concluding meta-text
+        transformed_text = clean_llm_response(transformed_text)
         
         # Apply original font style if preservation is requested
         if preserve_font:
@@ -298,6 +370,8 @@ def transform_text():
                     'createdAt': datetime.datetime.now(),
                     'metadata': {
                         'characterCount': len(text),
+                        'wordCount': original_word_count,
+                        'targetWordCount': target_word_count,
                         'sourceType': 'file' if 'file' in request.files else 'paste',
                         'modelUsed': model_name
                     }
