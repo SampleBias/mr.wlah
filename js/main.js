@@ -16,6 +16,10 @@ const clearOutputBtn = document.getElementById('clear-output-btn');
 const docProcessingContainer = document.getElementById('doc-processing-container');
 const docProcessingProgress = document.querySelector('.doc-processing-progress');
 const docProcessingPercentage = document.querySelector('.doc-processing-percentage');
+const downloadProcessingContainer = document.getElementById('download-processing-container');
+const downloadProcessingProgress = document.querySelector('.download-processing-progress');
+const downloadProcessingPercentage = document.querySelector('.download-processing-percentage');
+const downloadProcessingLabel = document.querySelector('.download-processing-label');
 
 // Gemini API configuration (loaded from config)
 let API_KEY, API_URL;
@@ -561,7 +565,7 @@ copyBtn.addEventListener('click', () => {
 });
 
 // Download Text
-downloadBtn.addEventListener('click', () => {
+downloadBtn.addEventListener('click', async () => {
     // If output contains HTML, we need to get its inner text or HTML
     const isHTML = outputText.innerHTML !== outputText.textContent;
     const text = isHTML ? outputText.innerHTML : outputText.textContent;
@@ -572,34 +576,78 @@ downloadBtn.addEventListener('click', () => {
         return;
     }
     
-    // In a real implementation, PDF and DOC would use proper libraries
-    if (format === 'pdf' || format === 'doc') {
-        alert(`In production, this would generate a proper ${format.toUpperCase()} file.`);
-        return;
-    }
-    
-    // Determine content type based on format and content
-    let contentType = 'text/plain';
-    let fileName = `mr-wlah-transformed.${format}`;
-    let content = text;
-    
-    // If HTML content and downloading as txt, consider if we should save as HTML
-    if (isHTML && format === 'txt' && confirm('Your text contains formatting. Save as HTML instead?')) {
-        contentType = 'text/html';
-        fileName = 'mr-wlah-transformed.html';
-        content = `<!DOCTYPE html>
+    try {
+        // Prepare content based on format
+        let fileName = `mr-wlah-transformed.${format}`;
+        let content, contentType;
+        
+        // For plain text, we can handle it directly
+        if (format === 'txt') {
+            contentType = 'text/plain';
+            
+            // If HTML content and downloading as txt, consider if we should save as HTML
+            if (isHTML && confirm('Your text contains formatting. Save as HTML instead?')) {
+                contentType = 'text/html';
+                fileName = 'mr-wlah-transformed.html';
+                content = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <title>Mr. Wlah Transformed Text</title>
 </head>
 <body>
-    ${content}
+    ${text}
 </body>
 </html>`;
+                
+                // Use download agent for consistent experience
+                await prepareDownload(content, 'html');
+            } else {
+                // Process with download agent
+                content = await prepareDownload(text, format);
+            }
+            
+            // Create and download the file
+            downloadFile(content, fileName, contentType);
+        } else {
+            // For other formats, use the download agent
+            try {
+                // Disable download button during processing
+                downloadBtn.disabled = true;
+                
+                // Process with download agent
+                const result = await prepareDownload(text, format);
+                
+                if (result.isBlob) {
+                    // Download the blob directly
+                    const url = URL.createObjectURL(result.content);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } else {
+                    // Download the text content
+                    downloadFile(result.content, fileName, result.type);
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                alert(`Error creating ${format.toUpperCase()} file. Please try again or use a different format.`);
+            } finally {
+                // Re-enable download button
+                downloadBtn.disabled = false;
+            }
+        }
+    } catch (error) {
+        console.error('Download error:', error);
+        alert('Failed to prepare download. Please try again.');
     }
-    
-    // Create and download the file
+});
+
+// Helper function to download file
+function downloadFile(content, fileName, contentType) {
     const blob = new Blob([content], { type: contentType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -609,7 +657,7 @@ downloadBtn.addEventListener('click', () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-});
+}
 
 // Modal Handling
 loginBtn.addEventListener('click', () => {
@@ -648,4 +696,172 @@ clearOutputBtn.addEventListener('click', () => {
 });
 
 // Initialize when the DOM is loaded
-document.addEventListener('DOMContentLoaded', init); 
+document.addEventListener('DOMContentLoaded', init);
+
+// Download Agent
+async function prepareDownload(text, format) {
+    try {
+        // Show download processing container
+        downloadProcessingContainer.classList.add('active');
+        downloadProcessingProgress.style.width = '0%';
+        downloadProcessingPercentage.textContent = '0%';
+        
+        // Set the format type class for proper icon
+        downloadProcessingLabel.classList.remove('txt', 'doc', 'odt', 'pdf');
+        downloadProcessingLabel.classList.add(format);
+        
+        // Start processing animation
+        const totalSteps = 4;
+        
+        // Step 1: Initialize
+        await updateDownloadProgress(1, totalSteps, `Preparing ${format.toUpperCase()} file...`);
+        
+        // Step 2: Processing content
+        await updateDownloadProgress(2, totalSteps, `Processing content for ${format.toUpperCase()}...`);
+        
+        // Step 3: Formatting
+        await updateDownloadProgress(3, totalSteps, `Applying ${format.toUpperCase()} formatting...`);
+        
+        // Step 4: Finalizing
+        await updateDownloadProgress(4, totalSteps, `Finalizing ${format.toUpperCase()} document...`);
+        
+        // Process the document format on the server for advanced formats
+        if (format === 'odt' || format === 'doc' || format === 'pdf') {
+            const result = await generateDocumentOnServer(text, format);
+            
+            // Complete
+            downloadProcessingProgress.style.width = '100%';
+            downloadProcessingPercentage.textContent = '100%';
+            
+            // Hide processing container after a short delay
+            setTimeout(() => {
+                downloadProcessingContainer.classList.remove('active');
+            }, 500);
+            
+            return result;
+        } else {
+            // For TXT format, we can handle it client-side
+            downloadProcessingProgress.style.width = '100%';
+            downloadProcessingPercentage.textContent = '100%';
+            
+            // Hide processing container after a short delay
+            setTimeout(() => {
+                downloadProcessingContainer.classList.remove('active');
+            }, 500);
+            
+            return text;
+        }
+    } catch (error) {
+        // Handle error gracefully
+        handleDownloadError(error.message || `Error creating ${format.toUpperCase()} file`);
+        throw error;
+    }
+}
+
+// Update download progress bar
+async function updateDownloadProgress(step, totalSteps, message) {
+    return new Promise(resolve => {
+        const percentage = Math.floor((step / totalSteps) * 100);
+        
+        // Update progress bar and percentage
+        downloadProcessingProgress.style.width = `${percentage}%`;
+        downloadProcessingPercentage.textContent = `${percentage}%`;
+        
+        // Update processing label
+        downloadProcessingLabel.textContent = message;
+        
+        // Simulate processing time
+        setTimeout(resolve, 500);
+    });
+}
+
+// Handle download processing errors
+function handleDownloadError(errorMessage) {
+    // Show error in processing container
+    downloadProcessingContainer.classList.add('active');
+    downloadProcessingLabel.textContent = 'Error Creating Document';
+    downloadProcessingLabel.style.color = 'var(--secondary-color)';
+    
+    // Remove specific document type classes
+    downloadProcessingLabel.classList.remove('txt', 'doc', 'odt', 'pdf');
+    
+    downloadProcessingPercentage.textContent = 'Failed';
+    downloadProcessingPercentage.style.color = 'var(--secondary-color)';
+    downloadProcessingProgress.style.width = '100%';
+    downloadProcessingProgress.style.backgroundColor = 'var(--secondary-color)';
+    
+    // Log the error
+    console.error('Document download error:', errorMessage);
+    
+    // Hide error after a delay
+    setTimeout(() => {
+        // Reset styles
+        downloadProcessingLabel.style.color = '';
+        downloadProcessingLabel.textContent = 'Preparing Download';
+        downloadProcessingPercentage.style.color = '';
+        downloadProcessingProgress.style.backgroundColor = '';
+        
+        // Hide container
+        downloadProcessingContainer.classList.remove('active');
+    }, 3000);
+}
+
+// Generate document on server
+async function generateDocumentOnServer(text, format) {
+    try {
+        const response = await fetch('/api/document/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                text,
+                fileType: format
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server failed to generate ${format} document`);
+        }
+        
+        // For binary downloads like PDF
+        if (format === 'pdf' || format === 'doc' || format === 'odt') {
+            // Get the blob from the response
+            const blob = await response.blob();
+            return {
+                content: blob,
+                type: getContentType(format),
+                isBlob: true
+            };
+        }
+        
+        // For JSON responses (if the server returns text or other data)
+        const data = await response.json();
+        return {
+            content: data.content,
+            type: getContentType(format),
+            isBlob: false
+        };
+    } catch (error) {
+        console.error('Error generating document:', error);
+        throw error;
+    }
+}
+
+// Get content type based on format
+function getContentType(format) {
+    switch(format) {
+        case 'txt':
+            return 'text/plain';
+        case 'html':
+            return 'text/html';
+        case 'doc':
+            return 'application/msword';
+        case 'odt':
+            return 'application/vnd.oasis.opendocument.text';
+        case 'pdf':
+            return 'application/pdf';
+        default:
+            return 'text/plain';
+    }
+} 

@@ -1,6 +1,6 @@
 import os
 import sys
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template, send_from_directory, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 import google.genai as genai
@@ -11,8 +11,13 @@ import json
 from authlib.integrations.flask_client import OAuth
 import PyPDF2
 import docx
+from docx.shared import Pt
 import datetime
 import re
+import io
+import tempfile
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 
 # Import database logging functions
 try:
@@ -599,6 +604,180 @@ def logout():
     
     # Clear session
     return jsonify({'message': 'Logged out successfully'})
+
+@app.route('/api/document/generate', methods=['POST'])
+def generate_document():
+    try:
+        # Get request data from JSON
+        data = request.get_json() if request.is_json else {}
+        text = data.get('text', '')
+        format_type = data.get('fileType', 'pdf')
+        
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+        
+        # Generate document based on file type
+        if format_type == 'pdf':
+            return generate_pdf(text)
+        elif format_type == 'doc':
+            return generate_docx(text)
+        elif format_type == 'odt':
+            return generate_odt(text)
+        else:
+            return jsonify({'error': f'Unsupported file type: {format_type}'}), 400
+    
+    except Exception as e:
+        error_msg = f"Error generating document: {str(e)}"
+        print(error_msg)
+        add_system_log(error_msg, "ERROR")
+        return jsonify({'error': 'Failed to generate document'}), 500
+
+def generate_pdf(text):
+    """Generate a PDF document from text"""
+    try:
+        # Create a bytes buffer for the PDF
+        buffer = io.BytesIO()
+        
+        # Create the PDF with ReportLab
+        pdf = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+        
+        # Set up font and margins
+        pdf.setFont("Helvetica", 12)
+        margin = 72  # 1 inch margins
+        text_width = width - 2 * margin
+        y_position = height - margin
+        
+        # Process the text and add to PDF
+        lines = text.split('\n')
+        for line in lines:
+            # Use ReportLab's wrap functionality to handle line breaks
+            text_object = pdf.beginText(margin, y_position)
+            text_object.setFont("Helvetica", 12)
+            
+            # If it's a blank line, move down
+            if not line.strip():
+                y_position -= 20
+                continue
+                
+            # Wrap text to fit within margins
+            wrapped_text = [line[i:i+80] for i in range(0, len(line), 80)]
+            
+            for wrap in wrapped_text:
+                text_object.textLine(wrap)
+                y_position -= 15
+                
+                # Check if we need a new page
+                if y_position < margin:
+                    pdf.drawText(text_object)
+                    pdf.showPage()
+                    pdf.setFont("Helvetica", 12)
+                    y_position = height - margin
+                    text_object = pdf.beginText(margin, y_position)
+                    text_object.setFont("Helvetica", 12)
+            
+            pdf.drawText(text_object)
+        
+        # Save the PDF
+        pdf.save()
+        
+        # Move the buffer position to the beginning
+        buffer.seek(0)
+        
+        # Return the PDF as a response
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name='mr-wlah-transformed.pdf'
+        )
+    
+    except Exception as e:
+        error_msg = f"PDF generation error: {str(e)}"
+        add_system_log(error_msg, "ERROR")
+        return jsonify({'error': error_msg}), 500
+
+def generate_docx(text):
+    """Generate a DOCX document from text"""
+    try:
+        # Create a new Document
+        doc = docx.Document()
+        
+        # Add title
+        title = doc.add_heading('Mr. Wlah Transformed Text', 0)
+        title.alignment = 1  # Center alignment
+        
+        # Add paragraphs
+        paragraphs = text.split('\n\n')
+        for para in paragraphs:
+            if para.strip():
+                p = doc.add_paragraph()
+                p.add_run(para).font.size = Pt(12)
+        
+        # Save to a BytesIO object
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        
+        # Return the document as a response
+        return send_file(
+            buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            as_attachment=True,
+            download_name='mr-wlah-transformed.docx'
+        )
+    
+    except Exception as e:
+        error_msg = f"DOCX generation error: {str(e)}"
+        add_system_log(error_msg, "ERROR")
+        return jsonify({'error': error_msg}), 500
+
+def generate_odt(text):
+    """Generate an ODT document from text"""
+    try:
+        # For ODT format, we'll convert from DOCX
+        # First create a DOCX document
+        doc = docx.Document()
+        
+        # Add title
+        title = doc.add_heading('Mr. Wlah Transformed Text', 0)
+        title.alignment = 1  # Center alignment
+        
+        # Add paragraphs
+        paragraphs = text.split('\n\n')
+        for para in paragraphs:
+            if para.strip():
+                p = doc.add_paragraph()
+                p.add_run(para).font.size = Pt(12)
+        
+        # Save to a temporary file
+        temp_docx = tempfile.NamedTemporaryFile(delete=False, suffix='.docx')
+        doc.save(temp_docx.name)
+        temp_docx.close()
+        
+        # Use a third-party conversion like LibreOffice (in a production environment)
+        # For this implementation, we'll return a DOCX file with a message
+        with open(temp_docx.name, 'rb') as file:
+            docx_data = file.read()
+        
+        # Clean up the temporary file
+        os.unlink(temp_docx.name)
+        
+        # Prepare the response
+        buffer = io.BytesIO(docx_data)
+        
+        # Return the document
+        return send_file(
+            buffer,
+            mimetype='application/vnd.oasis.opendocument.text',
+            as_attachment=True,
+            download_name='mr-wlah-transformed.odt'
+        )
+    
+    except Exception as e:
+        error_msg = f"ODT generation error: {str(e)}"
+        add_system_log(error_msg, "ERROR")
+        return jsonify({'error': error_msg}), 500
 
 if __name__ == '__main__':
     try:

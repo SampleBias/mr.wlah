@@ -21,6 +21,7 @@ google-genai>=1.0.0
 # File handling
 PyPDF2==3.0.1
 python-docx==0.8.11
+reportlab==4.0.5  # For PDF generation
 
 # Utilities
 requests==2.31.0

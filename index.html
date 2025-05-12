@@ -80,8 +80,20 @@
                     <select id="download-format">
                         <option value="txt">.txt</option>
                         <option value="doc">.doc</option>
+                        <option value="odt">.odt</option>
                         <option value="pdf">.pdf</option>
                     </select>
+                </div>
+                
+                <!-- Download Processing Agent -->
+                <div id="download-processing-container" class="doc-processing-container">
+                    <div class="doc-processing-status">
+                        <span class="download-processing-label">Preparing Download</span>
+                        <span class="download-processing-percentage">0%</span>
+                    </div>
+                    <div class="doc-processing-bar">
+                        <div class="download-processing-progress"></div>
+                    </div>
                 </div>
             </section>
         </main>
