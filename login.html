@@ -182,21 +182,47 @@
         // Check if user is already authenticated
         async function checkAuthStatus() {
             try {
+                console.log("Checking auth status...");
                 const response = await fetch('/api/auth/status');
                 if (response.ok) {
                     const data = await response.json();
+                    console.log("Auth status response:", data);
+                    
                     if (data.isAuthenticated) {
+                        console.log("User is authenticated, redirecting to home");
                         // If already authenticated, redirect to home
                         window.location.href = '/';
+                        return true;
                     }
                 }
+                console.log("User is not authenticated");
+                return false;
             } catch (error) {
                 console.error('Error checking auth status:', error);
+                return false;
             }
         }
         
         // Check on page load
-        checkAuthStatus();
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Check for error in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const error = urlParams.get('error');
+            if (error) {
+                console.error("Login error:", error);
+                // Could display error message to user here
+            }
+            
+            // Check if already authenticated
+            const isAuthenticated = await checkAuthStatus();
+            if (isAuthenticated) {
+                // Already redirecting in checkAuthStatus
+                return;
+            }
+            
+            // Enable login UI components
+            console.log("Setting up login UI");
+        });
         
         // Terms modal functionality
         const termsModal = document.getElementById('terms-modal');
@@ -230,12 +256,16 @@
         loginButton.addEventListener('click', async () => {
             if (termsCheckbox.checked) {
                 try {
-                    console.log("Login button clicked, redirecting to Auth0");
+                    console.log("Login button clicked, redirecting to server-side Auth0 login");
                     
-                    // Direct server-side login
+                    // Prevent any chance of double-click or multiple login attempts
+                    loginButton.disabled = true;
+                    
+                    // Direct server-side login - using form submission for more reliable redirect
                     window.location.href = '/api/auth/login';
                 } catch (error) {
                     console.error('Login error:', error);
+                    loginButton.disabled = false;
                 }
             }
         });

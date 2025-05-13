@@ -37,13 +37,16 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='.')
-CORS(app)
+CORS(app, supports_credentials=True)
 
 # Configure session
 app.secret_key = os.getenv('SESSION_SECRET', os.urandom(24))
 app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_PERMANENT'] = False
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=24)
+app.config['SESSION_PERMANENT'] = True  # Make sessions persistent
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=7)  # Extend session lifetime
+app.config['SESSION_COOKIE_SECURE'] = False  # Change to True for HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Configure Google Gemini API
 api_key = os.getenv('GEMINI_API_KEY')
@@ -351,26 +354,49 @@ app.json_encoder = JSONEncoder
 @app.route('/')
 def index():
     # Check if user is logged in
-    is_logged_in = 'logged_in' in session and session['logged_in']
+    is_logged_in = 'logged_in' in session and session['logged_in'] == True
     
-    # Add debug logging
+    # Add detailed logging to troubleshoot the issue
     if is_logged_in:
+        # User is authenticated
         user_info = session.get('profile', {})
         add_system_log(f"User accessing homepage: {user_info.get('name', 'Unknown')}", "INFO")
+        
+        # Make sure session is persisted
+        session.modified = True
+        
+        # Serve the main application
+        return send_file('index.html')
     else:
+        # Look for session but not properly logged in
+        if 'profile' in session:
+            add_system_log("Session exists but not properly logged in, clearing session", "WARNING")
+            session.clear()
+        
         add_system_log("Unauthenticated user attempting to access homepage, redirecting to login", "INFO")
+        
+        # If not authenticated, redirect to login
         return redirect('/login')
-    
-    # User is authenticated, serve the main application
-    return send_file('index.html')
 
 @app.route('/login')
 def login_page():
     # If user is already logged in, redirect to homepage
-    if 'logged_in' in session and session['logged_in']:
+    if 'logged_in' in session and session['logged_in'] == True:
         add_system_log("Authenticated user accessing login page, redirecting to homepage", "INFO")
-        return redirect('/')
         
+        # Ensure session data persists
+        session.modified = True
+        
+        return redirect('/')
+    
+    # Check if there's an error parameter
+    error = request.args.get('error')
+    if error:
+        add_system_log(f"Login page accessed with error: {error}", "WARNING")
+    
+    # Log for debugging the double login issue
+    add_system_log("Serving login page to unauthenticated user", "INFO")
+    
     # Otherwise serve the login page
     return send_file('login.html')
 
@@ -567,8 +593,16 @@ def get_user_transformations():
 # Auth0 routes
 @app.route('/api/auth/login')
 def login():
+    # Check if already logged in
+    if 'logged_in' in session and session['logged_in'] == True:
+        add_system_log("Already authenticated user attempting to log in, redirecting to home", "INFO")
+        return redirect('/')
+    
     # Log the login attempt
-    add_system_log("Login attempt initiated")
+    add_system_log("Login attempt initiated, redirecting to Auth0", "INFO")
+    
+    # Make sure to clear any leftover session data
+    session.clear()
     
     # Redirect to Auth0 for authentication
     return auth0.authorize_redirect(
@@ -586,6 +620,9 @@ def callback():
         add_system_log(f"Auth0 callback received for user: {userinfo.get('email', 'Unknown')}")
         
         # Store user info in session
+        session.clear()  # Clear any existing session data
+        session.permanent = True  # Make this session permanent (respects PERMANENT_SESSION_LIFETIME)
+        
         session['jwt_payload'] = userinfo
         session['profile'] = {
             'user_id': userinfo['sub'],
@@ -594,6 +631,10 @@ def callback():
             'email': userinfo.get('email', '')
         }
         session['logged_in'] = True
+        session['auth_time'] = datetime.datetime.now().timestamp()
+        
+        # Ensure session is saved immediately
+        session.modified = True
         
         # Log the successful authentication
         add_system_log(f"User authenticated: {userinfo.get('name', 'Unknown')} ({userinfo.get('email', 'No email')})")
@@ -625,13 +666,13 @@ def callback():
                 add_system_log(f"Error updating user record: {str(e)}", "ERROR")
         
         # Debug log to trace the issue
-        add_system_log(f"Redirecting authenticated user to home page", "INFO")
+        add_system_log(f"Authentication complete, redirecting to home page", "INFO")
         
-        # Redirect to homepage with cache-busting parameter
-        return redirect('/?auth=' + datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
+        # Redirect directly to the homepage without any parameters
+        return redirect('/')
     except Exception as e:
         add_system_log(f"Auth0 callback error: {str(e)}", "ERROR")
-        return redirect('/login')
+        return redirect('/login?error=callback_failed')
 
 @app.route('/api/auth/logout')
 def logout():
