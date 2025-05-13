@@ -8,8 +8,8 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
     <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <!-- Auth0 SDK -->
-    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+    <!-- Auth0 Lock SDK -->
+    <script src="https://cdn.auth0.com/js/lock/12.0/lock.min.js"></script>
     <style>
         .login-container {
             max-width: 500px;
@@ -188,69 +188,68 @@
     </footer>
 
     <script>
-        // Auth0 configuration
-        let auth0Client = null;
+        // Auth0 Lock configuration
+        let lock = null;
         
-        // Initialize Auth0 client
-        async function initAuth0() {
+        // Initialize Auth0 Lock
+        function initAuth0Lock() {
             try {
-                // For debugging
-                console.log("Current URL:", window.location.href);
+                console.log("Initializing Auth0 Lock");
                 
-                // Fetch Auth0 configuration from server or define it here
+                // Auth0 configuration
                 const auth0Config = {
                     domain: 'dev-pblqfit7lbhgifgs.us.auth0.com',
-                    client_id: 'i44iiEKNOT4KeBSLpflce2rSrlsofvPO',
-                    redirect_uri: window.location.origin,
-                    cacheLocation: 'localstorage'
+                    clientId: 'i44iiEKNOT4KeBSLpflce2rSrlsofvPO',
+                    redirectUrl: window.location.origin,
+                    responseType: 'code',
+                    auth: {
+                        redirectUrl: window.location.origin,
+                        responseType: 'code',
+                        params: {
+                            scope: 'openid profile email'
+                        }
+                    },
+                    theme: {
+                        logo: 'img/favicon.svg', // Update with your logo path
+                        primaryColor: '#00f0ff'
+                    },
+                    languageDictionary: {
+                        title: 'Mr. Wlah'
+                    }
                 };
                 
-                console.log("Creating Auth0 client with config:", JSON.stringify(auth0Config));
-                console.log("Redirect URI:", window.location.origin);
+                // Create Auth0 Lock instance
+                if (typeof Auth0Lock !== 'function') {
+                    throw new Error("Auth0Lock not loaded");
+                }
                 
-                auth0Client = await createAuth0Client({
-                    domain: auth0Config.domain,
-                    clientId: auth0Config.client_id,
-                    authorizationParams: {
-                        redirect_uri: auth0Config.redirect_uri
-                    },
-                    cacheLocation: auth0Config.cacheLocation
+                lock = new Auth0Lock(
+                    auth0Config.clientId,
+                    auth0Config.domain,
+                    auth0Config
+                );
+                
+                // Handle authentication result
+                lock.on('authenticated', function(authResult) {
+                    console.log('Authenticated!', authResult);
+                    
+                    // Store token and redirect
+                    localStorage.setItem('auth_token', authResult.accessToken);
+                    window.location.href = '/';
                 });
                 
-                // Check for the code and state parameters
-                if (window.location.search.includes("code=") && window.location.search.includes("state=")) {
-                    console.log("Auth0 redirect detected, handling callback");
-                    try {
-                        // Handle the redirect and retrieve tokens
-                        const result = await auth0Client.handleRedirectCallback();
-                        console.log("Redirect callback handled successfully", result);
-                        
-                        // Clear the URL parameters
-                        window.history.replaceState({}, document.title, '/');
-                        
-                        // Check if authenticated and redirect
-                        if (await auth0Client.isAuthenticated()) {
-                            const user = await auth0Client.getUser();
-                            console.log("User authenticated after redirect:", user);
-                            window.location.href = '/';
-                        }
-                    } catch (callbackError) {
-                        console.error("Error handling redirect callback:", callbackError);
-                        showError("Error processing login response: " + callbackError.message);
-                    }
-                }
+                // Handle authentication error
+                lock.on('authorization_error', function(error) {
+                    console.error('Authentication error', error);
+                    showError('Authentication error: ' + error.error_description);
+                });
                 
-                // Check if user is already authenticated
-                const isAuthenticated = await auth0Client.isAuthenticated();
-                if (isAuthenticated) {
-                    console.log("User is already authenticated, redirecting to home page");
-                    window.location.href = '/';
-                }
-                
-                console.log("Auth0 client initialized successfully");
+                console.log("Auth0 Lock initialized successfully");
+                return true;
             } catch (error) {
-                console.error("Error initializing Auth0 client:", error);
+                console.error("Error initializing Auth0 Lock:", error);
                 showError("Error initializing authentication. Please try again.");
+                return false;
             }
         }
         
@@ -259,6 +258,7 @@
             const errorElement = document.getElementById('error-message');
             errorElement.textContent = message;
             errorElement.style.display = 'block';
+            console.error("Error shown to user:", message);
         }
         
         // Check URL for error parameters
@@ -273,53 +273,36 @@
             }
         }
         
-        // Login with Auth0
-        async function login() {
+        // Check if user is authenticated
+        function checkAuthStatus() {
+            // Simple check for token - you might want a more robust check
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+                console.log("User has auth token, redirecting to home page");
+                window.location.href = '/';
+                return true;
+            }
+            return false;
+        }
+        
+        // Login with Auth0 Lock
+        function login() {
             try {
-                console.log("Starting login process...");
-                
-                // Try redirect login instead of popup if popup is causing issues
-                const useRedirect = true; // Set to false to use popup
-                
-                if (useRedirect) {
-                    console.log("Using redirect login flow");
-                    await auth0Client.loginWithRedirect({
-                        redirect_uri: window.location.origin,
-                        scope: 'openid profile email'
-                    });
-                    // The page will redirect, so no need for additional code here
+                if (!lock) {
+                    showError("Authentication service not ready. Please reload the page.");
                     return;
-                } else {
-                    // Popup login flow
-                    console.log("Using popup login flow");
-                    await auth0Client.loginWithPopup({
-                        scope: 'openid profile email'
-                    });
-                    
-                    // If login successful, redirect to home
-                    if (await auth0Client.isAuthenticated()) {
-                        console.log("Authentication successful, redirecting to home");
-                        window.location.href = '/';
-                    }
                 }
+                
+                console.log("Showing Auth0 Lock");
+                lock.show();
             } catch (error) {
-                console.error("Login error:", error);
-                let errorMessage = "Login failed. ";
+                console.error("Error showing Auth0 Lock:", error);
+                showError("Error starting login process: " + error.message);
                 
-                // More detailed error information
-                if (error.message) {
-                    errorMessage += error.message;
-                }
-                
-                if (error.error_description) {
-                    errorMessage += " " + error.error_description;
-                }
-                
-                if (error.name) {
-                    console.error("Error name:", error.name);
-                }
-                
-                showError(errorMessage);
+                // Re-enable login button
+                const loginButton = document.getElementById('login-button');
+                loginButton.disabled = false;
+                loginButton.textContent = 'Sign In';
             }
         }
         
@@ -363,19 +346,43 @@
                 loginButton.disabled = true;
                 loginButton.textContent = 'Signing in...';
                 
-                // Use Auth0 SPA SDK login
-                login().finally(() => {
-                    // Re-enable the button if login doesn't redirect
+                // Show Auth0 Lock
+                try {
+                    login();
+                } catch (error) {
+                    console.error("Error in login process:", error);
+                    // Re-enable the button if login fails
                     loginButton.disabled = !termsCheckbox.checked;
                     loginButton.textContent = 'Sign In';
-                });
+                }
             }
         });
         
-        // Initialize the Auth0 client when the page loads
+        // Initialize when the page loads
         document.addEventListener('DOMContentLoaded', () => {
-            console.log("Login page loaded, initializing Auth0");
-            initAuth0();
+            console.log("Login page loaded");
+            
+            // Check if already authenticated
+            if (!checkAuthStatus()) {
+                // Initialize Auth0 Lock
+                if (typeof Auth0Lock === 'function') {
+                    initAuth0Lock();
+                } else {
+                    console.log("Auth0Lock not loaded yet, waiting for script");
+                    window.addEventListener('load', () => {
+                        setTimeout(() => {
+                            if (typeof Auth0Lock === 'function') {
+                                initAuth0Lock();
+                            } else {
+                                console.error("Auth0Lock failed to load");
+                                showError("Authentication service failed to load. Please refresh the page.");
+                            }
+                        }, 500);
+                    });
+                }
+            }
+            
+            // Check for errors
             checkForErrors();
         });
     </script>
