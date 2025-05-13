@@ -47,6 +47,8 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=7)  # Extend 
 app.config['SESSION_COOKIE_SECURE'] = False  # Change to True for HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # Refresh session on each request to prevent expiration
+app.config['SESSION_USE_SIGNER'] = True  # Add signature to cookies for security
 
 # Configure Google Gemini API
 api_key = os.getenv('GEMINI_API_KEY')
@@ -668,8 +670,25 @@ def callback():
         # Debug log to trace the issue
         add_system_log(f"Authentication complete, redirecting to home page", "INFO")
         
-        # Redirect directly to the homepage without any parameters
-        return redirect('/')
+        # Force a direct response with a JavaScript redirect to prevent any caching issues
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Authentication Successful</title>
+        </head>
+        <body>
+            <p>Authentication successful! Redirecting...</p>
+            <script>
+                // Clear any cached redirects
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState({}, document.title, "/");
+                }
+                window.location.href = "/";
+            </script>
+        </body>
+        </html>
+        """
     except Exception as e:
         add_system_log(f"Auth0 callback error: {str(e)}", "ERROR")
         return redirect('/login?error=callback_failed')

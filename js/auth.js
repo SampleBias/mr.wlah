@@ -26,7 +26,17 @@ async function initAuth0() {
         localStorage.setItem('auth0ClientId', auth0Config.clientId);
     }
     
-    // Check if we need user info from server
+    // Get the current page
+    const currentPage = window.location.pathname;
+    
+    // Skip auth check on index.html since it has its own check and redirect
+    if (currentPage === '/' || currentPage === '/index.html') {
+        return;
+    }
+    
+    // Check if this is the login page
+    const isLoginPage = currentPage === '/login' || currentPage.includes('login.html');
+    
     try {
         // Query authentication status from server
         const response = await fetch('/api/auth/status');
@@ -34,20 +44,32 @@ async function initAuth0() {
             const authStatus = await response.json();
             console.log('Auth status from server:', authStatus);
             
-            // If we're authenticated on the server, proceed with UI update
             if (authStatus.isAuthenticated) {
+                // User is authenticated
+                
+                // If on login page, redirect to home
+                if (isLoginPage) {
+                    console.log('User is authenticated on login page, redirecting to home');
+                    window.location.href = '/';
+                    return;
+                }
+                
                 // Update UI with server-provided user info
                 updateUIWithServerAuth(authStatus.user);
-                return;
+            } else {
+                // Not authenticated, update UI
+                updateUIUnauthenticated();
+                
+                // If on index.html (main app) and not authenticated, redirect to login
+                if (currentPage === '/' || currentPage === '/index.html') {
+                    console.log('Not authenticated on main app, redirecting to login');
+                    window.location.href = '/login';
+                }
             }
         }
     } catch (statusError) {
         console.error('Error checking server auth status:', statusError);
     }
-    
-    // If not authenticated via server, redirect to login
-    console.log('Not authenticated via server, checking login state...');
-    updateUIUnauthenticated();
 }
 
 // Update UI when authenticated via server
@@ -56,42 +78,45 @@ function updateUIWithServerAuth(user) {
     if (!loginBtn) return;
     
     loginBtn.textContent = 'Logout';
+    loginBtn.href = '/api/auth/logout';
     loginBtn.onclick = (e) => {
         e.preventDefault();
         logout();
     };
     
     // Create a user profile element if it doesn't exist
-    if (!document.getElementById('user-profile')) {
+    if (!document.getElementById('user-profile') && user) {
         const headerNav = document.querySelector('nav ul');
-        const profileItem = document.createElement('li');
-        profileItem.innerHTML = `
-            <div id="user-profile" class="user-profile">
-                <img src="${user.picture}" alt="${user.name}" class="profile-pic">
-                <span>${user.name}</span>
-            </div>
-        `;
-        headerNav.prepend(profileItem);
-        
-        // Add styles for the user profile
-        const style = document.createElement('style');
-        style.textContent = `
-            .user-profile {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 5px;
-                border: 1px solid var(--primary-color);
-                border-radius: 4px;
-            }
-            .profile-pic {
-                width: 30px;
-                height: 30px;
-                border-radius: 50%;
-                border: 1px solid var(--primary-color);
-            }
-        `;
-        document.head.appendChild(style);
+        if (headerNav) {
+            const profileItem = document.createElement('li');
+            profileItem.innerHTML = `
+                <div id="user-profile" class="user-profile">
+                    <img src="${user.picture}" alt="${user.name}" class="profile-pic">
+                    <span>${user.name}</span>
+                </div>
+            `;
+            headerNav.prepend(profileItem);
+            
+            // Add styles for the user profile
+            const style = document.createElement('style');
+            style.textContent = `
+                .user-profile {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 5px;
+                    border: 1px solid var(--primary-color);
+                    border-radius: 4px;
+                }
+                .profile-pic {
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    border: 1px solid var(--primary-color);
+                }
+            `;
+            document.head.appendChild(style);
+        }
     }
 }
 
@@ -101,6 +126,7 @@ function updateUIUnauthenticated() {
     if (!loginBtn) return;
     
     loginBtn.textContent = 'Login';
+    loginBtn.href = '/api/auth/login';
     loginBtn.onclick = (e) => {
         e.preventDefault();
         login();

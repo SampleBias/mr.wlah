@@ -21,7 +21,7 @@
             <nav>
                 <ul>
                     <li><a href="how-to-use.html" id="how-to-use">How to Use</a></li>
-                    <li><a href="/login" id="login-btn">Login</a></li>
+                    <li><a href="/api/auth/logout" id="logout-btn">Logout</a></li>
                 </ul>
             </nav>
         </header>
@@ -100,16 +100,6 @@
         </main>
     </div>
 
-    <!-- Login Modal -->
-    <div id="login-modal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <div id="login-container">
-                <!-- Auth0 login will be injected here -->
-            </div>
-        </div>
-    </div>
-
     <footer>
         <p>&copy; <span id="current-year"></span> Mr. Wlah | Write Like A Human</p>
     </footer>
@@ -118,37 +108,66 @@
         // Set current year in footer
         document.getElementById('current-year').textContent = new Date().getFullYear();
         
-        // Check authentication status and update login/logout buttons
-        async function checkAuthStatus() {
+        // Check if user is authenticated, if not redirect to login
+        async function checkAuthentication() {
             try {
-                console.log("Checking auth status...");
+                console.log("Checking authentication status...");
                 const response = await fetch('/api/auth/status');
                 if (response.ok) {
                     const data = await response.json();
-                    console.log("Auth status response:", data);
                     
-                    // Get login button
-                    const loginBtn = document.getElementById('login-btn');
-                    
-                    if (data.isAuthenticated) {
-                        console.log("User is authenticated");
-                        // Update login button to be logout
-                        loginBtn.textContent = 'Logout';
-                        loginBtn.setAttribute('href', '/api/auth/logout');
+                    if (!data.isAuthenticated) {
+                        console.log("User is not authenticated, redirecting to login");
+                        window.location.href = '/login';
                     } else {
-                        console.log("User is not authenticated");
-                        // Ensure login button is set correctly
-                        loginBtn.textContent = 'Login';
-                        loginBtn.setAttribute('href', '/login');
+                        console.log("User is authenticated, displaying user information");
+                        
+                        // Add user profile if it doesn't exist
+                        if (data.user && !document.getElementById('user-profile')) {
+                            const headerNav = document.querySelector('nav ul');
+                            const profileItem = document.createElement('li');
+                            profileItem.innerHTML = `
+                                <div id="user-profile" class="user-profile">
+                                    <img src="${data.user.picture}" alt="${data.user.name}" class="profile-pic">
+                                    <span>${data.user.name}</span>
+                                </div>
+                            `;
+                            headerNav.prepend(profileItem);
+                            
+                            // Add styles for the user profile if not already added
+                            if (!document.querySelector('style#profile-styles')) {
+                                const style = document.createElement('style');
+                                style.id = 'profile-styles';
+                                style.textContent = `
+                                    .user-profile {
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 10px;
+                                        padding: 5px;
+                                        border: 1px solid var(--primary-color);
+                                        border-radius: 4px;
+                                    }
+                                    .profile-pic {
+                                        width: 30px;
+                                        height: 30px;
+                                        border-radius: 50%;
+                                        border: 1px solid var(--primary-color);
+                                    }
+                                `;
+                                document.head.appendChild(style);
+                            }
+                        }
                     }
+                } else {
+                    console.error("Error checking authentication status");
                 }
             } catch (error) {
-                console.error('Error checking auth status:', error);
+                console.error('Error checking authentication status:', error);
             }
         }
         
         // Run auth check when page loads
-        document.addEventListener('DOMContentLoaded', checkAuthStatus);
+        document.addEventListener('DOMContentLoaded', checkAuthentication);
     </script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>

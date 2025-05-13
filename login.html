@@ -120,6 +120,23 @@
             cursor: not-allowed;
         }
     </style>
+    <script>
+        // Immediately check if user is authenticated and redirect if true
+        (async function() {
+            try {
+                const response = await fetch('/api/auth/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.isAuthenticated) {
+                        console.log("User is already authenticated, redirecting to home...");
+                        window.location.href = '/';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking authentication status:', error);
+            }
+        })();
+    </script>
 </head>
 <body>
     <div class="container">
