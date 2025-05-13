@@ -8,8 +8,6 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
     <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <!-- Auth0 Lock SDK -->
-    <script src="https://cdn.auth0.com/js/lock/12.0/lock.min.js"></script>
     <style>
         .login-container {
             max-width: 500px;
@@ -188,119 +186,11 @@
     </footer>
 
     <script>
-        // Auth0 Lock configuration
-        let lock = null;
-        
-        // Initialize Auth0 Lock
-        function initAuth0Lock() {
-            // Auth0 configuration
-            const auth0Config = {
-                domain: 'dev-pblqfit7lbhgifgs.us.auth0.com',
-                clientId: 'i44iiEKNOT4KeBSLpflce2rSrlsofvPO',
-                redirectUrl: window.location.origin,
-                responseType: 'code',
-                auth: {
-                    redirectUrl: window.location.origin,
-                    responseType: 'code',
-                    params: {
-                        scope: 'openid profile email'
-                    }
-                },
-                theme: {
-                    logo: 'img/favicon.svg',
-                    primaryColor: '#00f0ff'
-                },
-                languageDictionary: {
-                    title: 'Mr. Wlah'
-                }
-            };
-            
-            // Create Auth0 Lock instance
-            lock = new Auth0Lock(
-                auth0Config.clientId,
-                auth0Config.domain,
-                auth0Config
-            );
-            
-            // Handle authentication result
-            lock.on('authenticated', function(authResult) {
-                console.log('Authenticated!', authResult);
-                
-                // Store tokens
-                if (authResult && authResult.accessToken) {
-                    localStorage.setItem('auth_token', authResult.accessToken);
-                }
-                
-                if (authResult && authResult.idToken) {
-                    localStorage.setItem('id_token', authResult.idToken);
-                }
-                
-                // Store expiration time
-                if (authResult && authResult.expiresIn) {
-                    const expiresAt = JSON.stringify(
-                        authResult.expiresIn * 1000 + new Date().getTime()
-                    );
-                    localStorage.setItem('expires_at', expiresAt);
-                }
-                
-                // Store user info
-                if (authResult && authResult.idTokenPayload) {
-                    localStorage.setItem('user_info', JSON.stringify(authResult.idTokenPayload));
-                }
-                
-                // Store is_authenticated flag
-                localStorage.setItem('is_authenticated', 'true');
-                
-                // Set a cookie for server-side auth
-                document.cookie = "auth_token=" + authResult.accessToken + "; path=/";
-                document.cookie = "id_token=" + authResult.idToken + "; path=/";
-                
-                // Post the tokens to server for session creation
-                fetch('/auth/session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        id_token: authResult.idToken,
-                        access_token: authResult.accessToken
-                    }),
-                    credentials: 'include'
-                })
-                .then(response => {
-                    if (response.ok) {
-                        window.location.href = '/';
-                    } else {
-                        throw new Error('Failed to create session');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error creating session:', error);
-                    // Try direct redirect as fallback
-                    window.location.href = '/';
-                });
-            });
-            
-            // Handle authentication error
-            lock.on('authorization_error', function(error) {
-                showError('Authentication error: ' + error.error_description);
-            });
-        }
-        
-        // Helper to show error messages
+        // Helper function to show error messages
         function showError(message) {
             const errorElement = document.getElementById('error-message');
             errorElement.textContent = message;
             errorElement.style.display = 'block';
-        }
-        
-        // Show Auth0 Lock
-        function login() {
-            if (lock) {
-                lock.show();
-            } else {
-                showError("Authentication service not available");
-            }
         }
         
         // Set current year in footer
@@ -334,20 +224,20 @@
             loginButton.disabled = !termsCheckbox.checked;
         });
         
-        // Auth0 login handling
+        // Auth0 login handling - redirect to server auth endpoint
         loginButton.addEventListener('click', () => {
             if (termsCheckbox.checked) {
-                login();
+                // Redirect to server auth endpoint
+                window.location.href = '/api/auth/login';
             }
         });
         
         // Initialize when the page loads
         document.addEventListener('DOMContentLoaded', () => {
-            // Initialize Auth0 Lock
-            initAuth0Lock();
+            // Check for Auth0 callback
+            const urlParams = new URLSearchParams(window.location.search);
             
             // Check for errors in URL
-            const urlParams = new URLSearchParams(window.location.search);
             const error = urlParams.get('error');
             const errorDescription = urlParams.get('error_description');
             
