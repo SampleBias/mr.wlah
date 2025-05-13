@@ -37,6 +37,34 @@ function init() {
     initConfig();
     // Add preserve font option
     addPreserveFontCheckbox();
+    
+    // Set up clear button event listeners
+    setupClearButtons();
+}
+
+// Set up clear button functionality
+function setupClearButtons() {
+    const clearInputBtn = document.getElementById('clear-input-btn');
+    const clearOutputBtn = document.getElementById('clear-output-btn');
+    const inputText = document.getElementById('input-text');
+    const outputText = document.getElementById('output-text');
+    
+    if (clearInputBtn) {
+        clearInputBtn.addEventListener('click', () => {
+            if (inputText) {
+                inputText.value = '';
+                inputText.focus();
+            }
+        });
+    }
+    
+    if (clearOutputBtn) {
+        clearOutputBtn.addEventListener('click', () => {
+            if (outputText) {
+                outputText.innerHTML = '';
+            }
+        });
+    }
 }
 
 // Add preserve font checkbox to the UI
@@ -683,17 +711,6 @@ function pixelWriteEffect(element, text, index = 0, speed = 30) {
         setTimeout(() => pixelWriteEffect(element, text, index + 1, speed), speed);
     }
 }
-
-// Clear input text
-clearInputBtn.addEventListener('click', () => {
-    inputText.value = '';
-    inputText.focus();
-});
-
-// Clear output text
-clearOutputBtn.addEventListener('click', () => {
-    outputText.innerHTML = '';
-});
 
 // Initialize when the DOM is loaded
 document.addEventListener('DOMContentLoaded', init);

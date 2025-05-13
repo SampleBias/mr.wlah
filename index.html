@@ -75,6 +75,17 @@
                     <button id="clear-output-btn" class="clear-btn" title="Clear output text">Clear</button>
                 </div>
                 
+                <!-- Inline script to ensure clear buttons work immediately -->
+                <script>
+                    // Set up clear buttons as early as possible
+                    document.getElementById('clear-input-btn')?.addEventListener('click', () => {
+                        document.getElementById('input-text').value = '';
+                    });
+                    document.getElementById('clear-output-btn')?.addEventListener('click', () => {
+                        document.getElementById('output-text').innerHTML = '';
+                    });
+                </script>
+                
                 <div class="action-buttons">
                     <button id="copy-btn" class="pixel-btn">Copy</button>
                     <button id="download-btn" class="pixel-btn">Download</button>
