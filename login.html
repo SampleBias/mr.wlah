@@ -233,30 +233,53 @@
                 lock.on('authenticated', function(authResult) {
                     console.log('Authenticated!', authResult);
                     
-                    // Store tokens properly
-                    if (authResult && authResult.accessToken) {
-                        localStorage.setItem('auth_token', authResult.accessToken);
+                    try {
+                        // Store tokens properly
+                        if (authResult && authResult.accessToken) {
+                            localStorage.setItem('auth_token', authResult.accessToken);
+                            console.log('Stored access token');
+                        }
+                        
+                        if (authResult && authResult.idToken) {
+                            localStorage.setItem('id_token', authResult.idToken);
+                            console.log('Stored ID token');
+                        }
+                        
+                        // Store expiration time if available
+                        if (authResult && authResult.expiresIn) {
+                            const expiresAt = JSON.stringify(
+                                authResult.expiresIn * 1000 + new Date().getTime()
+                            );
+                            localStorage.setItem('expires_at', expiresAt);
+                            console.log('Stored token expiration');
+                        }
+                        
+                        // Store user info
+                        if (authResult && authResult.idTokenPayload) {
+                            localStorage.setItem('user_info', JSON.stringify(authResult.idTokenPayload));
+                            console.log('Stored user info');
+                        }
+                        
+                        // Also store a simple flag to indicate user is logged in
+                        localStorage.setItem('is_authenticated', 'true');
+                        
+                        console.log('Authentication complete, redirecting to home');
+                        console.log('Storage state:', {
+                            auth_token: !!localStorage.getItem('auth_token'),
+                            id_token: !!localStorage.getItem('id_token'),
+                            expires_at: !!localStorage.getItem('expires_at'),
+                            is_authenticated: localStorage.getItem('is_authenticated')
+                        });
+                        
+                        // Add a small delay before redirecting
+                        setTimeout(function() {
+                            // Use the root path for Heroku apps
+                            window.location.href = '/';
+                        }, 300);
+                    } catch (error) {
+                        console.error('Error storing authentication data:', error);
+                        showError('Authentication successful but error storing data. Please try again.');
                     }
-                    
-                    if (authResult && authResult.idToken) {
-                        localStorage.setItem('id_token', authResult.idToken);
-                    }
-                    
-                    // Store expiration time if available
-                    if (authResult && authResult.expiresIn) {
-                        const expiresAt = JSON.stringify(
-                            authResult.expiresIn * 1000 + new Date().getTime()
-                        );
-                        localStorage.setItem('expires_at', expiresAt);
-                    }
-                    
-                    console.log('Authentication complete, redirecting to home');
-                    
-                    // Add a small delay before redirecting
-                    setTimeout(function() {
-                        // Use the appropriate main page path - adjust this to match your site structure
-                        window.location.href = '/index.html';
-                    }, 300);
                 });
                 
                 // Handle authentication error
@@ -300,26 +323,31 @@
             const token = localStorage.getItem('auth_token');
             const idToken = localStorage.getItem('id_token');
             const expiresAt = localStorage.getItem('expires_at');
+            const isAuthenticated = localStorage.getItem('is_authenticated');
             
             console.log('Checking auth status:', {
                 hasAccessToken: !!token,
                 hasIdToken: !!idToken,
-                hasExpiry: !!expiresAt
+                hasExpiry: !!expiresAt,
+                isAuthenticated: isAuthenticated
             });
             
-            // Check if token exists and is not expired
-            if (token) {
-                if (expiresAt) {
-                    const expired = new Date().getTime() > JSON.parse(expiresAt);
-                    if (expired) {
-                        console.log('Token expired, clearing and staying on login page');
-                        clearAuthData();
-                        return false;
+            // Check for simple authentication flag first
+            if (isAuthenticated === 'true') {
+                // Then verify token if we have one
+                if (token) {
+                    if (expiresAt) {
+                        const expired = new Date().getTime() > JSON.parse(expiresAt);
+                        if (expired) {
+                            console.log('Token expired, clearing and staying on login page');
+                            clearAuthData();
+                            return false;
+                        }
                     }
+                    
+                    console.log('User has valid auth token');
+                    return true;
                 }
-                
-                console.log('User has valid auth token');
-                return true;
             }
             
             console.log('No valid auth token found, staying on login page');
@@ -329,9 +357,20 @@
         // Clear auth data (logout)
         function clearAuthData() {
             console.log('Clearing auth data');
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('id_token');
-            localStorage.removeItem('expires_at');
+            try {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('id_token');
+                localStorage.removeItem('expires_at');
+                localStorage.removeItem('user_info');
+                localStorage.removeItem('is_authenticated');
+                
+                // Also try session storage just in case
+                sessionStorage.removeItem('just_redirected');
+                
+                console.log('Auth data cleared');
+            } catch (error) {
+                console.error('Error clearing auth data:', error);
+            }
         }
         
         // Logout function
@@ -339,7 +378,7 @@
             clearAuthData();
             
             // Force reload the page to clear any cached state
-            window.location.reload();
+            window.location.href = '/login';
         }
         
         // Login with Auth0 Lock
@@ -427,16 +466,27 @@
                 return;
             }
             
-            // Check if we're on the login page
+            // Check current location
             const currentPath = window.location.pathname;
+            const currentURL = window.location.href;
             console.log('Current path:', currentPath);
+            console.log('Current URL:', currentURL);
             
-            // Better detection for login page
-            const isLoginPage = currentPath.endsWith('login.html') || 
-                                currentPath.includes('/login') || 
-                                document.title.toLowerCase().includes('login');
+            // Check if we're already on the home page
+            const isHomePage = currentPath === '/' || currentPath === '';
             
+            // Special case for Heroku login page
+            const isLoginPage = currentPath.includes('/login') || 
+                               document.title.toLowerCase().includes('login');
+            
+            console.log('Is home page:', isHomePage);
             console.log('Is login page:', isLoginPage);
+            
+            // Don't redirect if we're already on the home page
+            if (isHomePage && !isLoginPage) {
+                console.log('Already on home page, not redirecting');
+                return;
+            }
             
             // Only redirect if we're authenticated and on the login page
             if (isLoginPage && checkAuthStatus()) {
@@ -445,10 +495,8 @@
                 // Set redirect flag to prevent loops
                 sessionStorage.setItem('just_redirected', 'true');
                 
-                // Use the appropriate main page path
-                const mainPage = '/index.html';
-                console.log('Redirecting to:', mainPage);
-                window.location.href = mainPage;
+                // Use the root path for Heroku apps
+                window.location.href = '/';
                 return;
             }
             
