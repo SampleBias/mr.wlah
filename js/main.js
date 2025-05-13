@@ -692,7 +692,7 @@ clearInputBtn.addEventListener('click', () => {
 
 // Clear output text
 clearOutputBtn.addEventListener('click', () => {
-    outputText.textContent = '';
+    outputText.innerHTML = '';
 });
 
 // Initialize when the DOM is loaded
