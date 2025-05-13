@@ -100,6 +100,64 @@
         </main>
     </div>
 
+    <!-- Subscription Modal -->
+    <div id="subscription-modal" class="subscription-modal">
+        <div class="subscription-content">
+            <span class="close-subscription">&times;</span>
+            <h2>Usage Limit Reached</h2>
+            <div class="usage-indicator">
+                <p>You have used <span class="usage-count">2/2</span> free transformations</p>
+            </div>
+            <p>Upgrade to continue transforming your text and unlock additional features.</p>
+            
+            <div class="subscription-plans">
+                <div class="plan-card">
+                    <div class="plan-name">Basic</div>
+                    <div class="plan-price">$3.99/mo</div>
+                    <ul class="plan-features">
+                        <li>10 transformations per month</li>
+                        <li>Priority support</li>
+                        <li>Basic formatting options</li>
+                    </ul>
+                    <a href="https://buy.stripe.com/8wMbLb7fa6kW8bmcN1" target="_blank">
+                        <button class="subscribe-btn">Subscribe</button>
+                    </a>
+                </div>
+                
+                <div class="plan-card popular">
+                    <div class="popular-tag">Popular</div>
+                    <div class="plan-name">Pro</div>
+                    <div class="plan-price">$9.99/mo</div>
+                    <ul class="plan-features">
+                        <li>25 transformations per month</li>
+                        <li>Priority support</li>
+                        <li>Advanced formatting options</li>
+                        <li>PDF and DOC export</li>
+                    </ul>
+                    <a href="https://buy.stripe.com/6oE8yZ1UQaBc63efZc" target="_blank">
+                        <button class="subscribe-btn">Subscribe</button>
+                    </a>
+                </div>
+                
+                <div class="plan-card">
+                    <div class="plan-name">Unlimited</div>
+                    <div class="plan-price">$49.99/mo</div>
+                    <div class="plan-discount">$69.99/mo</div>
+                    <ul class="plan-features">
+                        <li>Unlimited transformations</li>
+                        <li>Premium support</li>
+                        <li>All formatting options</li>
+                        <li>All export formats</li>
+                        <li>API access</li>
+                    </ul>
+                    <a href="https://buy.stripe.com/4gwbLb8je4cObny00d" target="_blank">
+                        <button class="subscribe-btn">Subscribe</button>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <footer>
         <p>&copy; <span id="current-year"></span> Mr. Wlah | Write Like A Human</p>
     </footer>
@@ -187,6 +245,7 @@
     </script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/rate-limit.js"></script>
     <script src="js/main.js"></script>
 </body>
 </html> 

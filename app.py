@@ -440,8 +440,256 @@ def document_processing_status():
         'progress': 100
     })
 
+# User subscription configurations
+SUBSCRIPTION_LIMITS = {
+    'FREE': 2,
+    'BASIC': 10,
+    'PRO': 25,
+    'UNLIMITED': float('inf')
+}
+
+# Admin PIN for admin panel access (should be stored in env var in production)
+ADMIN_PIN = os.getenv('ADMIN_PIN', '123456')  # Default for development only
+
+@app.route('/admin')
+def admin_panel():
+    """Serve the admin panel"""
+    return send_file('admin.html')
+
+@app.route('/api/admin/login', methods=['POST'])
+def admin_login():
+    """Admin login with PIN"""
+    data = request.json
+    pin = data.get('pin')
+    
+    if not pin or pin != ADMIN_PIN:
+        return jsonify({'success': False, 'message': 'Invalid PIN'}), 401
+    
+    # Set admin session
+    session['is_admin'] = True
+    add_system_log(f"Admin logged in successfully", "INFO")
+    
+    return jsonify({'success': True})
+
+@app.route('/api/admin/status')
+def admin_status():
+    """Check if user is logged in as admin"""
+    is_admin = session.get('is_admin', False)
+    return jsonify({'isAdmin': is_admin})
+
+@app.route('/api/admin/users')
+def admin_get_users():
+    """Get all users for admin panel"""
+    # Check if admin
+    if not session.get('is_admin', False):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        if users_collection:
+            users = list(users_collection.find())
+            
+            # Convert ObjectId to string for JSON serialization
+            for user in users:
+                user['_id'] = str(user['_id'])
+            
+            add_system_log(f"Admin fetched user list ({len(users)} users)", "INFO")
+            return jsonify(users)
+        else:
+            # Return sample data if no DB connection
+            return jsonify([
+                {
+                    '_id': '1',
+                    'name': 'Sample User',
+                    'email': 'user@example.com',
+                    'subscription': 'FREE',
+                    'usageCount': 1,
+                    'lastActive': '2023-05-13T18:57:22.681Z'
+                }
+            ])
+    except Exception as e:
+        add_system_log(f"Error fetching users: {str(e)}", "ERROR")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/user/<user_id>/grant', methods=['POST'])
+def admin_grant_subscription(user_id):
+    """Grant subscription to user"""
+    # Check if admin
+    if not session.get('is_admin', False):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.json
+    subscription = data.get('subscription', '').upper()
+    
+    if subscription not in SUBSCRIPTION_LIMITS:
+        return jsonify({'error': 'Invalid subscription type'}), 400
+    
+    try:
+        if users_collection:
+            # Update user subscription
+            users_collection.update_one(
+                {'_id': ObjectId(user_id)},
+                {'$set': {
+                    'subscription': subscription,
+                    'subscriptionUpdatedAt': datetime.datetime.utcnow()
+                }}
+            )
+            
+            add_system_log(f"Admin granted {subscription} subscription to user {user_id}", "INFO")
+            return jsonify({'success': True})
+        else:
+            # Mock response for no DB
+            return jsonify({'success': True})
+    except Exception as e:
+        add_system_log(f"Error granting subscription: {str(e)}", "ERROR")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/user/<user_id>/revoke', methods=['POST'])
+def admin_revoke_subscription(user_id):
+    """Revoke subscription from user"""
+    # Check if admin
+    if not session.get('is_admin', False):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        if users_collection:
+            # Update user subscription to FREE
+            users_collection.update_one(
+                {'_id': ObjectId(user_id)},
+                {'$set': {
+                    'subscription': 'FREE',
+                    'subscriptionUpdatedAt': datetime.datetime.utcnow()
+                }}
+            )
+            
+            add_system_log(f"Admin revoked subscription from user {user_id}", "INFO")
+            return jsonify({'success': True})
+        else:
+            # Mock response for no DB
+            return jsonify({'success': True})
+    except Exception as e:
+        add_system_log(f"Error revoking subscription: {str(e)}", "ERROR")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/subscription')
+def get_user_subscription():
+    """Get current user's subscription info"""
+    # Get user profile from session
+    profile = session.get('profile')
+    
+    if not profile:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    user_id = profile.get('user_id')
+    
+    try:
+        if users_collection:
+            # Get user from database
+            user = users_collection.find_one({'user_id': user_id})
+            
+            if user:
+                # Return subscription info
+                subscription_data = {
+                    'subscription': user.get('subscription', 'FREE'),
+                    'usageCount': user.get('usageCount', 0),
+                    'usageLimit': SUBSCRIPTION_LIMITS.get(user.get('subscription', 'FREE'), SUBSCRIPTION_LIMITS['FREE']),
+                    'lastResetDate': user.get('lastResetDate')
+                }
+                
+                return jsonify(subscription_data)
+            else:
+                # User not found, return default FREE
+                return jsonify({
+                    'subscription': 'FREE',
+                    'usageCount': 0,
+                    'usageLimit': SUBSCRIPTION_LIMITS['FREE'],
+                    'lastResetDate': None
+                })
+        else:
+            # Mock response for no DB
+            return jsonify({
+                'subscription': 'FREE',
+                'usageCount': 0,
+                'usageLimit': SUBSCRIPTION_LIMITS['FREE'],
+                'lastResetDate': None
+            })
+    except Exception as e:
+        add_system_log(f"Error getting subscription info: {str(e)}", "ERROR")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/record-transformation', methods=['POST'])
+def record_transformation():
+    """Record a text transformation for the current user"""
+    # Get user profile from session
+    profile = session.get('profile')
+    
+    if not profile:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    user_id = profile.get('user_id')
+    
+    try:
+        # Get the timestamp from the request
+        data = request.json or {}
+        timestamp = data.get('timestamp', datetime.datetime.utcnow().isoformat())
+        
+        if users_collection:
+            # Update user transformation count and last active date
+            users_collection.update_one(
+                {'user_id': user_id},
+                {
+                    '$inc': {'usageCount': 1},
+                    '$set': {'lastActive': timestamp}
+                },
+                upsert=True
+            )
+            
+            # Record transformation in history if enabled
+            if transformations_collection:
+                transformations_collection.insert_one({
+                    'user_id': user_id,
+                    'timestamp': timestamp,
+                    'type': 'text'
+                })
+            
+            add_system_log(f"Recorded transformation for user {user_id}", "INFO")
+            return jsonify({'success': True})
+        else:
+            # Mock response for no DB
+            return jsonify({'success': True})
+    except Exception as e:
+        add_system_log(f"Error recording transformation: {str(e)}", "ERROR")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/transform', methods=['POST'])
 def transform_text():
+    """Transform text using Gemini"""
+    # Get user profile from session
+    profile = session.get('profile')
+    
+    if not profile:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    user_id = profile.get('user_id')
+    
+    # Check if user has reached usage limit
+    if users_collection:
+        user = users_collection.find_one({'user_id': user_id})
+        
+        if user:
+            subscription = user.get('subscription', 'FREE')
+            usage_count = user.get('usageCount', 0)
+            
+            # Get limit based on subscription
+            usage_limit = SUBSCRIPTION_LIMITS.get(subscription, SUBSCRIPTION_LIMITS['FREE'])
+            
+            # Check if user has exceeded limit
+            if usage_count >= usage_limit and subscription != 'UNLIMITED':
+                add_system_log(f"User {user_id} exceeded usage limit ({usage_count}/{usage_limit})", "INFO")
+                return jsonify({
+                    'error': 'Usage limit exceeded',
+                    'message': 'You have reached your usage limit. Please upgrade your subscription to continue.'
+                }), 402  # 402 Payment Required
+    
     try:
         # Check if this is a file upload from FormData
         if request.files and 'file' in request.files:
@@ -460,7 +708,6 @@ def transform_text():
                 target_word_count = request.form.get('targetWordCount')
                 if target_word_count:
                     target_word_count = int(target_word_count)
-                user_id = request.form.get('userId')
             except Exception as e:
                 return jsonify({'error': f"Error processing file: {str(e)}"}), 400
         else:
@@ -468,7 +715,6 @@ def transform_text():
             data = request.get_json() if request.is_json else {}
             text = data.get('text', '')
             tone = data.get('tone', 'casual')
-            user_id = data.get('userId')
             preserve_font = data.get('preserveFont', True)
             target_word_count = data.get('targetWordCount')
             

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mr. Wlah | Admin Panel</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+    <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>Mr. Wlah</h1>
+                <p class="tagline">Admin Panel</p>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="/" id="home-link">Home</a></li>
+                    <li><a href="/api/auth/logout" id="logout-btn">Logout</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Admin Login Section (shown when not authenticated) -->
+            <section id="admin-login" class="admin-login">
+                <h2>Admin Access</h2>
+                <div id="login-error" class="error-message"></div>
+                
+                <form id="admin-login-form" class="admin-login-form">
+                    <p>Enter your 6-digit admin PIN:</p>
+                    
+                    <div class="pin-input">
+                        <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" required>
+                        <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" required>
+                        <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" required>
+                        <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" required>
+                        <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" required>
+                        <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" required>
+                    </div>
+                    
+                    <button type="submit" class="admin-login-btn">Access Admin Panel</button>
+                </form>
+            </section>
+            
+            <!-- Admin Dashboard (shown when authenticated) -->
+            <section id="admin-dashboard" class="admin-container" style="display:none;">
+                <div class="admin-header">
+                    <h2 class="admin-title">User Management</h2>
+                </div>
+                
+                <div class="search-filter">
+                    <input type="text" id="user-search" placeholder="Search by email or name...">
+                    <select id="plan-filter">
+                        <option value="all">All Plans</option>
+                        <option value="free">Free</option>
+                        <option value="basic">Basic</option>
+                        <option value="pro">Pro</option>
+                        <option value="unlimited">Unlimited</option>
+                    </select>
+                </div>
+                
+                <table class="admin-users-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Current Plan</th>
+                            <th>Usage</th>
+                            <th>Last Active</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        <!-- User rows will be added here by JavaScript -->
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; <span id="current-year"></span> Mr. Wlah | Admin Panel</p>
+    </footer>
+
+    <script>
+        // Set current year in footer
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+
+        // PIN input handling
+        const pinInputs = document.querySelectorAll('.pin-input input');
+        pinInputs.forEach((input, index) => {
+            // Auto-focus next input
+            input.addEventListener('input', (e) => {
+                if (e.target.value && index < pinInputs.length - 1) {
+                    pinInputs[index + 1].focus();
+                }
+            });
+            
+            // Handle backspace
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                    pinInputs[index - 1].focus();
+                }
+            });
+        });
+
+        // Admin login form handling
+        const adminLoginForm = document.getElementById('admin-login-form');
+        const adminLogin = document.getElementById('admin-login');
+        const adminDashboard = document.getElementById('admin-dashboard');
+        const loginError = document.getElementById('login-error');
+        const usersTableBody = document.getElementById('users-table-body');
+        const userSearch = document.getElementById('user-search');
+        const planFilter = document.getElementById('plan-filter');
+        
+        adminLoginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Collect PIN
+            let pin = '';
+            pinInputs.forEach(input => {
+                pin += input.value;
+            });
+            
+            // Validate PIN format
+            if (pin.length !== 6 || !/^\d+$/.test(pin)) {
+                showError('Please enter a valid 6-digit PIN');
+                return;
+            }
+            
+            try {
+                // Attempt to login with PIN
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ pin })
+                });
+                
+                if (response.ok) {
+                    // Success! Show dashboard
+                    adminLogin.style.display = 'none';
+                    adminDashboard.style.display = 'block';
+                    
+                    // Load users
+                    loadUsers();
+                } else {
+                    // Show error
+                    const data = await response.json();
+                    showError(data.message || 'Invalid PIN');
+                    
+                    // Clear PIN inputs
+                    pinInputs.forEach(input => {
+                        input.value = '';
+                    });
+                    pinInputs[0].focus();
+                }
+            } catch (error) {
+                console.error('Error logging in:', error);
+                showError('Server error. Please try again.');
+            }
+        });
+        
+        // Show error message
+        function showError(message) {
+            loginError.textContent = message;
+            loginError.style.display = 'block';
+        }
+        
+        // Load users from the server
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/admin/users');
+                if (response.ok) {
+                    const users = await response.json();
+                    renderUsers(users);
+                } else {
+                    console.error('Error loading users');
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+        
+        // Render users in the table
+        function renderUsers(users) {
+            // Clear table
+            usersTableBody.innerHTML = '';
+            
+            // Get filter values
+            const searchTerm = userSearch.value.toLowerCase();
+            const planFilterValue = planFilter.value;
+            
+            // Filter users
+            const filteredUsers = users.filter(user => {
+                const matchesSearch = 
+                    user.name?.toLowerCase().includes(searchTerm) || 
+                    user.email?.toLowerCase().includes(searchTerm);
+                
+                const matchesPlan = planFilterValue === 'all' || 
+                    user.subscription?.toLowerCase() === planFilterValue;
+                
+                return matchesSearch && matchesPlan;
+            });
+            
+            // Add user rows
+            filteredUsers.forEach(user => {
+                const row = document.createElement('tr');
+                
+                // Format the last active date
+                const lastActive = user.lastActive ? new Date(user.lastActive).toLocaleDateString() : 'Never';
+                
+                // Determine usage display
+                const usageDisplay = user.subscription?.toUpperCase() === 'UNLIMITED' 
+                    ? `${user.usageCount} / ∞` 
+                    : `${user.usageCount} / ${getUserLimit(user.subscription)}`;
+                
+                row.innerHTML = `
+                    <td>${user.name || 'Unknown'}</td>
+                    <td>${user.email || 'No email'}</td>
+                    <td>${user.subscription || 'FREE'}</td>
+                    <td>${usageDisplay}</td>
+                    <td>${lastActive}</td>
+                    <td class="admin-actions">
+                        <button class="admin-btn grant" data-user-id="${user._id}" data-action="grant-basic">Basic</button>
+                        <button class="admin-btn grant" data-user-id="${user._id}" data-action="grant-pro">Pro</button>
+                        <button class="admin-btn grant" data-user-id="${user._id}" data-action="grant-unlimited">Unlimited</button>
+                        <button class="admin-btn revoke" data-user-id="${user._id}" data-action="revoke">Revoke</button>
+                    </td>
+                `;
+                
+                usersTableBody.appendChild(row);
+            });
+            
+            // Add action button listeners
+            addActionButtonListeners();
+        }
+        
+        // Get user limit based on subscription
+        function getUserLimit(subscription) {
+            switch (subscription?.toUpperCase()) {
+                case 'BASIC': return 10;
+                case 'PRO': return 25;
+                case 'UNLIMITED': return '∞';
+                default: return 2;
+            }
+        }
+        
+        // Add listeners to action buttons
+        function addActionButtonListeners() {
+            document.querySelectorAll('.admin-btn').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const userId = button.dataset.userId;
+                    const action = button.dataset.action;
+                    
+                    if (!userId || !action) return;
+                    
+                    try {
+                        let endpoint = '/api/admin/user/';
+                        let subscription = null;
+                        
+                        if (action === 'revoke') {
+                            endpoint += `${userId}/revoke`;
+                        } else if (action.startsWith('grant-')) {
+                            subscription = action.replace('grant-', '');
+                            endpoint += `${userId}/grant`;
+                        }
+                        
+                        const response = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ subscription })
+                        });
+                        
+                        if (response.ok) {
+                            // Reload users after action
+                            loadUsers();
+                        } else {
+                            console.error('Error performing action');
+                        }
+                    } catch (error) {
+                        console.error('Error performing action:', error);
+                    }
+                });
+            });
+        }
+        
+        // Search and filter functionality
+        userSearch.addEventListener('input', () => {
+            loadUsers();
+        });
+        
+        planFilter.addEventListener('change', () => {
+            loadUsers();
+        });
+        
+        // Check if already authenticated as admin
+        async function checkAdminAuth() {
+            try {
+                const response = await fetch('/api/admin/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.isAdmin) {
+                        // Show dashboard
+                        adminLogin.style.display = 'none';
+                        adminDashboard.style.display = 'block';
+                        
+                        // Load users
+                        loadUsers();
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+            }
+        }
+        
+        // Run auth check when page loads
+        document.addEventListener('DOMContentLoaded', checkAdminAuth);
+    </script>
+</body>
+</html> 
