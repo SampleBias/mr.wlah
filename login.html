@@ -319,7 +319,7 @@
         
         // Check if user is authenticated
         function checkAuthStatus() {
-            // Improved token validation
+            // Get all auth data
             const token = localStorage.getItem('auth_token');
             const idToken = localStorage.getItem('id_token');
             const expiresAt = localStorage.getItem('expires_at');
@@ -332,25 +332,24 @@
                 isAuthenticated: isAuthenticated
             });
             
-            // Check for simple authentication flag first
-            if (isAuthenticated === 'true') {
-                // Then verify token if we have one
-                if (token) {
-                    if (expiresAt) {
-                        const expired = new Date().getTime() > JSON.parse(expiresAt);
-                        if (expired) {
-                            console.log('Token expired, clearing and staying on login page');
-                            clearAuthData();
-                            return false;
-                        }
+            // More strict validation
+            if (isAuthenticated === 'true' && token && idToken) {
+                // Verify token expiration
+                if (expiresAt) {
+                    const expired = new Date().getTime() > JSON.parse(expiresAt);
+                    if (expired) {
+                        console.log('Token expired, clearing auth data');
+                        clearAuthData();
+                        return false;
                     }
-                    
-                    console.log('User has valid auth token');
-                    return true;
                 }
+                
+                console.log('User has valid auth tokens');
+                return true;
             }
             
-            console.log('No valid auth token found, staying on login page');
+            console.log('No valid auth tokens found');
+            clearAuthData(); // Clear any partial auth data
             return false;
         }
         
@@ -363,10 +362,6 @@
                 localStorage.removeItem('expires_at');
                 localStorage.removeItem('user_info');
                 localStorage.removeItem('is_authenticated');
-                
-                // Also try session storage just in case
-                sessionStorage.removeItem('just_redirected');
-                
                 console.log('Auth data cleared');
             } catch (error) {
                 console.error('Error clearing auth data:', error);
@@ -458,49 +453,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             console.log("Login page loaded");
             
-            // Prevent redirect loops by checking for a redirect flag
-            const hasJustRedirected = sessionStorage.getItem('just_redirected');
-            if (hasJustRedirected) {
-                console.log('Preventing redirect loop - just redirected');
-                sessionStorage.removeItem('just_redirected');
-                return;
-            }
-            
             // Check current location
             const currentPath = window.location.pathname;
-            const currentURL = window.location.href;
             console.log('Current path:', currentPath);
-            console.log('Current URL:', currentURL);
             
-            // Check if we're already on the home page
-            const isHomePage = currentPath === '/' || currentPath === '';
-            
-            // Special case for Heroku login page
-            const isLoginPage = currentPath.includes('/login') || 
-                               document.title.toLowerCase().includes('login');
-            
-            console.log('Is home page:', isHomePage);
-            console.log('Is login page:', isLoginPage);
-            
-            // Don't redirect if we're already on the home page
-            if (isHomePage && !isLoginPage) {
-                console.log('Already on home page, not redirecting');
-                return;
-            }
-            
-            // Only redirect if we're authenticated and on the login page
-            if (isLoginPage && checkAuthStatus()) {
-                console.log('Already authenticated, redirecting to main page');
-                
-                // Set redirect flag to prevent loops
-                sessionStorage.setItem('just_redirected', 'true');
-                
-                // Use the root path for Heroku apps
-                window.location.href = '/';
-                return;
-            }
-            
-            // Initialize Auth0 Lock
+            // Initialize Auth0 Lock first
             if (typeof Auth0Lock === 'function') {
                 initAuth0Lock();
             } else {
@@ -517,9 +474,27 @@
                 });
             }
             
+            // Check if we're on the login page
+            const isLoginPage = currentPath.includes('/login');
+            
+            // Only perform redirects if not already on the correct page
+            if (isLoginPage) {
+                // If on login page, check if already authenticated
+                if (checkAuthStatus()) {
+                    console.log('Authenticated user on login page, redirecting to home');
+                    window.location.href = '/';
+                }
+            } else {
+                // If not on login page, make sure user is authenticated
+                if (!checkAuthStatus()) {
+                    console.log('Unauthenticated user not on login page, redirecting to login');
+                    window.location.href = '/login';
+                }
+            }
+            
             // Check for errors
             checkForErrors();
         });
     </script>
 </body>
-</html> 
+</html>
