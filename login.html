@@ -419,21 +419,36 @@
         document.addEventListener('DOMContentLoaded', () => {
             console.log("Login page loaded");
             
-            // Check if we're on the login page but should be redirected to main page
+            // Prevent redirect loops by checking for a redirect flag
+            const hasJustRedirected = sessionStorage.getItem('just_redirected');
+            if (hasJustRedirected) {
+                console.log('Preventing redirect loop - just redirected');
+                sessionStorage.removeItem('just_redirected');
+                return;
+            }
+            
+            // Check if we're on the login page
             const currentPath = window.location.pathname;
             console.log('Current path:', currentPath);
             
-            // Check for login page path
-            const isLoginPage = currentPath.includes('login.html') || 
-                               (currentPath === '/' && document.title.includes('Login'));
+            // Better detection for login page
+            const isLoginPage = currentPath.endsWith('login.html') || 
+                                currentPath.includes('/login') || 
+                                document.title.toLowerCase().includes('login');
             
             console.log('Is login page:', isLoginPage);
             
             // Only redirect if we're authenticated and on the login page
             if (isLoginPage && checkAuthStatus()) {
                 console.log('Already authenticated, redirecting to main page');
-                // Use the appropriate main page path - adjust this to match your site structure
-                window.location.href = '/index.html';
+                
+                // Set redirect flag to prevent loops
+                sessionStorage.setItem('just_redirected', 'true');
+                
+                // Use the appropriate main page path
+                const mainPage = '/index.html';
+                console.log('Redirecting to:', mainPage);
+                window.location.href = mainPage;
                 return;
             }
             
