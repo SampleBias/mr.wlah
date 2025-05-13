@@ -19,8 +19,8 @@
                 <p class="tagline">Write Like A Human</p>
             </div>
             <nav>
-                <ul>
-                    <li><a href="how-to-use.html" id="how-to-use">How to Use</a></li>
+                <ul id="nav-links">
+                    <!-- Navigation will be dynamically populated -->
                     <li><a href="/api/auth/logout" id="logout-btn">Logout</a></li>
                 </ul>
             </nav>
@@ -121,6 +121,16 @@
                         window.location.href = '/login';
                     } else {
                         console.log("User is authenticated, displaying user information");
+                        
+                        // Add "How to Use" link to navigation
+                        const navLinks = document.getElementById('nav-links');
+                        
+                        // Check if the How to Use link already exists
+                        if (!document.getElementById('how-to-use-link')) {
+                            const howToUseItem = document.createElement('li');
+                            howToUseItem.innerHTML = `<a href="how-to-use.html" id="how-to-use-link">How to Use</a>`;
+                            navLinks.insertBefore(howToUseItem, navLinks.firstChild);
+                        }
                         
                         // Add user profile if it doesn't exist
                         if (data.user && !document.getElementById('user-profile')) {

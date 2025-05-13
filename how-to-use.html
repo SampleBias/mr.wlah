@@ -8,6 +8,25 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
     <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <script>
+        // Immediately check if user is authenticated and redirect if not
+        (async function() {
+            try {
+                const response = await fetch('/api/auth/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (!data.isAuthenticated) {
+                        console.log("User is not authenticated, redirecting to login...");
+                        window.location.href = '/login';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking authentication status:', error);
+                // Redirect to login in case of error
+                window.location.href = '/login';
+            }
+        })();
+    </script>
     <style>
         .how-to-use-page {
             padding: 40px;
@@ -205,7 +224,7 @@
                     </ul>
                 </div>
                 
-                <a href="index.html" id="back-to-app" class="back-link hidden">← Back to Application</a>
+                <a href="index.html" id="back-to-app" class="back-link">← Back to Application</a>
             </div>
         </main>
     </div>
@@ -251,26 +270,17 @@
                             <li><a href="/api/auth/logout" id="logout-btn">Logout</a></li>
                         `;
                         
-                        // Show the Back to Application link
+                        // Show the Back to Application link - always show for authenticated users
                         backToAppLink.classList.remove('hidden');
                     } else {
-                        // User is not logged in, show login link
-                        navLinks.innerHTML = `
-                            <li><a href="#" id="login-btn">Login</a></li>
-                        `;
-                        
-                        // Hide the Back to Application link
-                        backToAppLink.classList.add('hidden');
-                        
-                        // Add event listener to login button
-                        document.getElementById('login-btn').addEventListener('click', (e) => {
-                            e.preventDefault();
-                            window.location.href = '/api/auth/login';
-                        });
+                        // User is not logged in, redirect to login page
+                        window.location.href = '/login';
                     }
                 }
             } catch (error) {
                 console.error('Error checking authentication status:', error);
+                // Redirect to login in case of error
+                window.location.href = '/login';
             }
         }
         
