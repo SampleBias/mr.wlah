@@ -29,13 +29,17 @@ async function initAuth0() {
     // Get the current page
     const currentPage = window.location.pathname;
     
-    // Skip auth check on index.html since it has its own check and redirect
-    if (currentPage === '/' || currentPage === '/index.html') {
+    // Skip auth check on index.html and login page since they have their own checks
+    if (currentPage === '/' || 
+        currentPage === '/index.html' ||
+        currentPage === '/login' || 
+        currentPage.includes('login.html')) {
+        console.log('Skipping auth.js auth check on page with its own checks:', currentPage);
         return;
     }
     
-    // Check if this is the login page
-    const isLoginPage = currentPage === '/login' || currentPage.includes('login.html');
+    // Only perform auth check on other pages
+    console.log('Performing auth.js auth check on page:', currentPage);
     
     try {
         // Query authentication status from server
@@ -45,26 +49,12 @@ async function initAuth0() {
             console.log('Auth status from server:', authStatus);
             
             if (authStatus.isAuthenticated) {
-                // User is authenticated
-                
-                // If on login page, redirect to home
-                if (isLoginPage) {
-                    console.log('User is authenticated on login page, redirecting to home');
-                    window.location.href = '/';
-                    return;
-                }
-                
-                // Update UI with server-provided user info
+                // User is authenticated, update UI
                 updateUIWithServerAuth(authStatus.user);
             } else {
-                // Not authenticated, update UI
-                updateUIUnauthenticated();
-                
-                // If on index.html (main app) and not authenticated, redirect to login
-                if (currentPage === '/' || currentPage === '/index.html') {
-                    console.log('Not authenticated on main app, redirecting to login');
-                    window.location.href = '/login';
-                }
+                // Not authenticated and not on login page, redirect to login
+                console.log('Not authenticated, redirecting to login');
+                window.location.href = '/login';
             }
         }
     } catch (statusError) {

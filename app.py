@@ -19,6 +19,7 @@ import tempfile
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from urllib.parse import urlencode
+import uuid
 
 # Import database logging functions
 try:
@@ -39,16 +40,22 @@ load_dotenv()
 app = Flask(__name__, static_folder='.')
 CORS(app, supports_credentials=True)
 
+# Set a more reliable secret key - Generate a fixed key for production
+if os.getenv('SESSION_SECRET'):
+    app.secret_key = os.getenv('SESSION_SECRET')
+else:
+    # Only for development - in production always use an environment variable
+    app.secret_key = 'mr_wlah_dev_secret_key_12345'
+
 # Configure session
-app.secret_key = os.getenv('SESSION_SECRET', os.urandom(24))
 app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_PERMANENT'] = True  # Make sessions persistent
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=7)  # Extend session lifetime
-app.config['SESSION_COOKIE_SECURE'] = False  # Change to True for HTTPS
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=7)
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # Refresh session on each request to prevent expiration
-app.config['SESSION_USE_SIGNER'] = True  # Add signature to cookies for security
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True
+app.config['SESSION_USE_SIGNER'] = True
 
 # Configure Google Gemini API
 api_key = os.getenv('GEMINI_API_KEY')
@@ -362,7 +369,8 @@ def index():
     if is_logged_in:
         # User is authenticated
         user_info = session.get('profile', {})
-        add_system_log(f"User accessing homepage: {user_info.get('name', 'Unknown')}", "INFO")
+        add_system_log(f"[INDEX ROUTE] User accessing homepage: {user_info.get('name', 'Unknown')} with session ID: {id(session)}", "INFO")
+        add_system_log(f"[INDEX ROUTE] Session data: logged_in={session.get('logged_in')}, has_profile={('profile' in session)}", "INFO")
         
         # Make sure session is persisted
         session.modified = True
@@ -372,10 +380,11 @@ def index():
     else:
         # Look for session but not properly logged in
         if 'profile' in session:
-            add_system_log("Session exists but not properly logged in, clearing session", "WARNING")
+            add_system_log(f"[INDEX ROUTE] Session exists but not properly logged in, clearing session. Session ID: {id(session)}", "WARNING")
+            add_system_log(f"[INDEX ROUTE] Session data before clearing: {dict(session)}", "WARNING")
             session.clear()
         
-        add_system_log("Unauthenticated user attempting to access homepage, redirecting to login", "INFO")
+        add_system_log("[INDEX ROUTE] Unauthenticated user attempting to access homepage, redirecting to login", "INFO")
         
         # If not authenticated, redirect to login
         return redirect('/login')
@@ -384,7 +393,8 @@ def index():
 def login_page():
     # If user is already logged in, redirect to homepage
     if 'logged_in' in session and session['logged_in'] == True:
-        add_system_log("Authenticated user accessing login page, redirecting to homepage", "INFO")
+        add_system_log(f"[LOGIN ROUTE] Authenticated user accessing login page, redirecting to homepage. Session ID: {id(session)}", "INFO")
+        add_system_log(f"[LOGIN ROUTE] Session data: {dict(session)}", "INFO")
         
         # Ensure session data persists
         session.modified = True
@@ -394,10 +404,11 @@ def login_page():
     # Check if there's an error parameter
     error = request.args.get('error')
     if error:
-        add_system_log(f"Login page accessed with error: {error}", "WARNING")
+        add_system_log(f"[LOGIN ROUTE] Login page accessed with error: {error}", "WARNING")
     
     # Log for debugging the double login issue
-    add_system_log("Serving login page to unauthenticated user", "INFO")
+    add_system_log(f"[LOGIN ROUTE] Serving login page to unauthenticated user. Session ID: {id(session)}", "INFO")
+    add_system_log(f"[LOGIN ROUTE] Current session data: {dict(session)}", "INFO")
     
     # Otherwise serve the login page
     return send_file('login.html')
@@ -619,12 +630,15 @@ def callback():
         resp = auth0.get('userinfo')
         userinfo = resp.json()
         
-        add_system_log(f"Auth0 callback received for user: {userinfo.get('email', 'Unknown')}")
+        add_system_log(f"[AUTH CALLBACK] Auth0 callback received for user: {userinfo.get('email', 'Unknown')}")
+        
+        # Clear and regenerate session for security
+        session.clear()
+        
+        # Set session to permanent
+        session.permanent = True
         
         # Store user info in session
-        session.clear()  # Clear any existing session data
-        session.permanent = True  # Make this session permanent (respects PERMANENT_SESSION_LIFETIME)
-        
         session['jwt_payload'] = userinfo
         session['profile'] = {
             'user_id': userinfo['sub'],
@@ -635,11 +649,16 @@ def callback():
         session['logged_in'] = True
         session['auth_time'] = datetime.datetime.now().timestamp()
         
+        # Add a session ID for tracking
+        session['session_id'] = str(uuid.uuid4())
+        
         # Ensure session is saved immediately
         session.modified = True
         
         # Log the successful authentication
-        add_system_log(f"User authenticated: {userinfo.get('name', 'Unknown')} ({userinfo.get('email', 'No email')})")
+        add_system_log(f"[AUTH CALLBACK] User authenticated: {userinfo.get('name', 'Unknown')} ({userinfo.get('email', 'No email')})")
+        add_system_log(f"[AUTH CALLBACK] Session data after authentication: {dict(session)}")
+        add_system_log(f"[AUTH CALLBACK] Session ID: {id(session)}")
         
         # Handle user record in database if configured
         if users_collection:
@@ -668,29 +687,12 @@ def callback():
                 add_system_log(f"Error updating user record: {str(e)}", "ERROR")
         
         # Debug log to trace the issue
-        add_system_log(f"Authentication complete, redirecting to home page", "INFO")
+        add_system_log(f"[AUTH CALLBACK] Authentication complete, redirecting to home page", "INFO")
         
-        # Force a direct response with a JavaScript redirect to prevent any caching issues
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Authentication Successful</title>
-        </head>
-        <body>
-            <p>Authentication successful! Redirecting...</p>
-            <script>
-                // Clear any cached redirects
-                if (window.history && window.history.replaceState) {
-                    window.history.replaceState({}, document.title, "/");
-                }
-                window.location.href = "/";
-            </script>
-        </body>
-        </html>
-        """
+        # Instead of complex JavaScript, just directly redirect to avoid issues
+        return redirect("/")
     except Exception as e:
-        add_system_log(f"Auth0 callback error: {str(e)}", "ERROR")
+        add_system_log(f"[AUTH CALLBACK] Auth0 callback error: {str(e)}", "ERROR")
         return redirect('/login?error=callback_failed')
 
 @app.route('/api/auth/logout')
@@ -895,8 +897,19 @@ def auth_status():
     """Endpoint to check if user is authenticated"""
     is_authenticated = 'logged_in' in session and session['logged_in']
     
+    # Add diagnostic logging
+    add_system_log(f"[AUTH STATUS] Auth status check - is_authenticated: {is_authenticated}, session ID: {id(session)}")
+    if 'profile' in session:
+        profile = session.get('profile', {})
+        add_system_log(f"[AUTH STATUS] User in session: {profile.get('name', 'Unknown')}")
+    
     if is_authenticated:
         profile = session.get('profile', {})
+        add_system_log(f"[AUTH STATUS] Returning authenticated status for user: {profile.get('name', 'Unknown')}")
+        
+        # Ensure session data persists
+        session.modified = True
+        
         return jsonify({
             'isAuthenticated': True,
             'user': {
@@ -907,6 +920,7 @@ def auth_status():
             }
         })
     else:
+        add_system_log("[AUTH STATUS] Returning unauthenticated status")
         return jsonify({
             'isAuthenticated': False
         })

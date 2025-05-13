@@ -115,64 +115,70 @@
                 const response = await fetch('/api/auth/status');
                 if (response.ok) {
                     const data = await response.json();
+                    console.log("Auth status response:", data);
                     
                     if (!data.isAuthenticated) {
                         console.log("User is not authenticated, redirecting to login");
                         window.location.href = '/login';
-                    } else {
-                        console.log("User is authenticated, displaying user information");
+                        return;
+                    }
+                    
+                    console.log("User is authenticated, displaying user information");
+                    
+                    // Add "How to Use" link to navigation
+                    const navLinks = document.getElementById('nav-links');
+                    
+                    // Check if the How to Use link already exists
+                    if (!document.getElementById('how-to-use-link')) {
+                        const howToUseItem = document.createElement('li');
+                        howToUseItem.innerHTML = `<a href="how-to-use.html" id="how-to-use-link">How to Use</a>`;
+                        navLinks.insertBefore(howToUseItem, navLinks.firstChild);
+                    }
+                    
+                    // Add user profile if it doesn't exist
+                    if (data.user && !document.getElementById('user-profile')) {
+                        const headerNav = document.querySelector('nav ul');
+                        const profileItem = document.createElement('li');
+                        profileItem.innerHTML = `
+                            <div id="user-profile" class="user-profile">
+                                <img src="${data.user.picture}" alt="${data.user.name}" class="profile-pic">
+                                <span>${data.user.name}</span>
+                            </div>
+                        `;
+                        headerNav.prepend(profileItem);
                         
-                        // Add "How to Use" link to navigation
-                        const navLinks = document.getElementById('nav-links');
-                        
-                        // Check if the How to Use link already exists
-                        if (!document.getElementById('how-to-use-link')) {
-                            const howToUseItem = document.createElement('li');
-                            howToUseItem.innerHTML = `<a href="how-to-use.html" id="how-to-use-link">How to Use</a>`;
-                            navLinks.insertBefore(howToUseItem, navLinks.firstChild);
-                        }
-                        
-                        // Add user profile if it doesn't exist
-                        if (data.user && !document.getElementById('user-profile')) {
-                            const headerNav = document.querySelector('nav ul');
-                            const profileItem = document.createElement('li');
-                            profileItem.innerHTML = `
-                                <div id="user-profile" class="user-profile">
-                                    <img src="${data.user.picture}" alt="${data.user.name}" class="profile-pic">
-                                    <span>${data.user.name}</span>
-                                </div>
+                        // Add styles for the user profile if not already added
+                        if (!document.querySelector('style#profile-styles')) {
+                            const style = document.createElement('style');
+                            style.id = 'profile-styles';
+                            style.textContent = `
+                                .user-profile {
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 10px;
+                                    padding: 5px;
+                                    border: 1px solid var(--primary-color);
+                                    border-radius: 4px;
+                                }
+                                .profile-pic {
+                                    width: 30px;
+                                    height: 30px;
+                                    border-radius: 50%;
+                                    border: 1px solid var(--primary-color);
+                                }
                             `;
-                            headerNav.prepend(profileItem);
-                            
-                            // Add styles for the user profile if not already added
-                            if (!document.querySelector('style#profile-styles')) {
-                                const style = document.createElement('style');
-                                style.id = 'profile-styles';
-                                style.textContent = `
-                                    .user-profile {
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 10px;
-                                        padding: 5px;
-                                        border: 1px solid var(--primary-color);
-                                        border-radius: 4px;
-                                    }
-                                    .profile-pic {
-                                        width: 30px;
-                                        height: 30px;
-                                        border-radius: 50%;
-                                        border: 1px solid var(--primary-color);
-                                    }
-                                `;
-                                document.head.appendChild(style);
-                            }
+                            document.head.appendChild(style);
                         }
                     }
                 } else {
                     console.error("Error checking authentication status");
+                    // Default to redirect on error
+                    window.location.href = '/login';
                 }
             } catch (error) {
                 console.error('Error checking authentication status:', error);
+                // Default to redirect on error
+                window.location.href = '/login';
             }
         }
         
