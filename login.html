@@ -128,17 +128,6 @@
             margin-bottom: 20px;
             display: none;
         }
-        
-        #debug-info {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            color: #ccc;
-            font-size: 0.8rem;
-            text-align: left;
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -171,9 +160,6 @@
                 </div>
                 
                 <button id="login-button" class="auth0-btn" disabled>Sign In</button>
-                
-                <!-- Debug info section -->
-                <div id="debug-info"></div>
             </div>
         </main>
         
@@ -202,158 +188,103 @@
     </footer>
 
     <script>
-        // Global debug flag - set to true to show debug info
-        const DEBUG = true;
-        
-        // Helper function to log debug info
-        function debugLog(message, obj = null) {
-            if (DEBUG) {
-                console.log(message, obj || '');
-                
-                // Also add to debug info panel
-                const debugInfoEl = document.getElementById('debug-info');
-                if (debugInfoEl) {
-                    if (debugInfoEl.style.display === 'none') {
-                        debugInfoEl.style.display = 'block';
-                    }
-                    
-                    const logItem = document.createElement('div');
-                    logItem.textContent = message + (obj ? ': ' + JSON.stringify(obj) : '');
-                    debugInfoEl.appendChild(logItem);
-                    
-                    // Keep only the last 10 messages
-                    while (debugInfoEl.children.length > 10) {
-                        debugInfoEl.removeChild(debugInfoEl.firstChild);
-                    }
-                }
-            }
-        }
-        
         // Auth0 Lock configuration
         let lock = null;
         
         // Initialize Auth0 Lock
         function initAuth0Lock() {
-            try {
-                debugLog("Initializing Auth0 Lock");
-                
-                // Auth0 configuration
-                const auth0Config = {
-                    domain: 'dev-pblqfit7lbhgifgs.us.auth0.com',
-                    clientId: 'i44iiEKNOT4KeBSLpflce2rSrlsofvPO',
+            // Auth0 configuration
+            const auth0Config = {
+                domain: 'dev-pblqfit7lbhgifgs.us.auth0.com',
+                clientId: 'i44iiEKNOT4KeBSLpflce2rSrlsofvPO',
+                redirectUrl: window.location.origin,
+                responseType: 'code',
+                auth: {
                     redirectUrl: window.location.origin,
                     responseType: 'code',
-                    auth: {
-                        redirectUrl: window.location.origin,
-                        responseType: 'code',
-                        params: {
-                            scope: 'openid profile email'
-                        }
-                    },
-                    theme: {
-                        logo: 'img/favicon.svg',
-                        primaryColor: '#00f0ff'
-                    },
-                    languageDictionary: {
-                        title: 'Mr. Wlah'
+                    params: {
+                        scope: 'openid profile email'
                     }
-                };
+                },
+                theme: {
+                    logo: 'img/favicon.svg',
+                    primaryColor: '#00f0ff'
+                },
+                languageDictionary: {
+                    title: 'Mr. Wlah'
+                }
+            };
+            
+            // Create Auth0 Lock instance
+            lock = new Auth0Lock(
+                auth0Config.clientId,
+                auth0Config.domain,
+                auth0Config
+            );
+            
+            // Handle authentication result
+            lock.on('authenticated', function(authResult) {
+                console.log('Authenticated!', authResult);
                 
-                // Create Auth0 Lock instance
-                if (typeof Auth0Lock !== 'function') {
-                    throw new Error("Auth0Lock not loaded");
+                // Store tokens
+                if (authResult && authResult.accessToken) {
+                    localStorage.setItem('auth_token', authResult.accessToken);
                 }
                 
-                lock = new Auth0Lock(
-                    auth0Config.clientId,
-                    auth0Config.domain,
-                    auth0Config
-                );
+                if (authResult && authResult.idToken) {
+                    localStorage.setItem('id_token', authResult.idToken);
+                }
                 
-                // Handle authentication result
-                lock.on('authenticated', function(authResult) {
-                    debugLog('Authenticated!', authResult);
-                    
-                    try {
-                        // Store tokens properly
-                        if (authResult && authResult.accessToken) {
-                            localStorage.setItem('auth_token', authResult.accessToken);
-                            debugLog('Stored access token');
-                        }
-                        
-                        if (authResult && authResult.idToken) {
-                            localStorage.setItem('id_token', authResult.idToken);
-                            debugLog('Stored ID token');
-                        }
-                        
-                        // Store expiration time if available
-                        if (authResult && authResult.expiresIn) {
-                            const expiresAt = JSON.stringify(
-                                authResult.expiresIn * 1000 + new Date().getTime()
-                            );
-                            localStorage.setItem('expires_at', expiresAt);
-                            debugLog('Stored token expiration');
-                        }
-                        
-                        // Store user info
-                        if (authResult && authResult.idTokenPayload) {
-                            localStorage.setItem('user_info', JSON.stringify(authResult.idTokenPayload));
-                            debugLog('Stored user info');
-                        }
-                        
-                        // Also store a simple flag to indicate user is logged in
-                        localStorage.setItem('is_authenticated', 'true');
-                        
-                        // Set a cookie that the server can read
-                        document.cookie = "auth_token=" + authResult.accessToken + "; path=/; max-age=86400; samesite=strict";
-                        document.cookie = "id_token=" + authResult.idToken + "; path=/; max-age=86400; samesite=strict";
-                        document.cookie = "is_authenticated=true; path=/; max-age=86400; samesite=strict";
-                        
-                        debugLog('Set auth cookies for server');
-                        debugLog('Authentication complete, redirecting to home');
-                        
-                        // Create a form and post to the server to establish a server-side session
-                        const form = document.createElement('form');
-                        form.method = 'POST';
-                        form.action = '/auth/callback';
-                        form.style.display = 'none';
-                        
-                        // Add token fields
-                        const tokenField = document.createElement('input');
-                        tokenField.type = 'hidden';
-                        tokenField.name = 'id_token';
-                        tokenField.value = authResult.idToken || '';
-                        form.appendChild(tokenField);
-                        
-                        const accessTokenField = document.createElement('input');
-                        accessTokenField.type = 'hidden';
-                        accessTokenField.name = 'access_token';
-                        accessTokenField.value = authResult.accessToken || '';
-                        form.appendChild(accessTokenField);
-                        
-                        // Add to document and submit
-                        document.body.appendChild(form);
-                        debugLog('Submitting auth form to server');
-                        form.submit();
-                    } catch (error) {
-                        console.error('Error storing authentication data:', error);
-                        showError('Authentication successful but error storing data. Please try again.');
+                // Store expiration time
+                if (authResult && authResult.expiresIn) {
+                    const expiresAt = JSON.stringify(
+                        authResult.expiresIn * 1000 + new Date().getTime()
+                    );
+                    localStorage.setItem('expires_at', expiresAt);
+                }
+                
+                // Store user info
+                if (authResult && authResult.idTokenPayload) {
+                    localStorage.setItem('user_info', JSON.stringify(authResult.idTokenPayload));
+                }
+                
+                // Store is_authenticated flag
+                localStorage.setItem('is_authenticated', 'true');
+                
+                // Set a cookie for server-side auth
+                document.cookie = "auth_token=" + authResult.accessToken + "; path=/";
+                document.cookie = "id_token=" + authResult.idToken + "; path=/";
+                
+                // Post the tokens to server for session creation
+                fetch('/auth/session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id_token: authResult.idToken,
+                        access_token: authResult.accessToken
+                    }),
+                    credentials: 'include'
+                })
+                .then(response => {
+                    if (response.ok) {
+                        window.location.href = '/';
+                    } else {
+                        throw new Error('Failed to create session');
                     }
+                })
+                .catch(error => {
+                    console.error('Error creating session:', error);
+                    // Try direct redirect as fallback
+                    window.location.href = '/';
                 });
-                
-                // Handle authentication error
-                lock.on('authorization_error', function(error) {
-                    console.error('Authentication error', error);
-                    showError('Authentication error: ' + error.error_description);
-                });
-                
-                debugLog("Auth0 Lock initialized successfully");
-                return true;
-            } catch (error) {
-                console.error("Error initializing Auth0 Lock:", error);
-                showError("Error initializing authentication. Please try again.");
-                return false;
-            }
+            });
+            
+            // Handle authentication error
+            lock.on('authorization_error', function(error) {
+                showError('Authentication error: ' + error.error_description);
+            });
         }
         
         // Helper to show error messages
@@ -361,90 +292,14 @@
             const errorElement = document.getElementById('error-message');
             errorElement.textContent = message;
             errorElement.style.display = 'block';
-            console.error("Error shown to user:", message);
         }
         
-        // Check URL for error parameters
-        function checkForErrors() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const error = urlParams.get('error');
-            const errorDescription = urlParams.get('error_description');
-            
-            if (error) {
-                showError(errorDescription || `Login error: ${error}`);
-                console.error("Login error:", error, errorDescription);
-            }
-        }
-        
-        // Check if user is authenticated
-        function checkAuthStatus() {
-            try {
-                const token = localStorage.getItem('auth_token');
-                const idToken = localStorage.getItem('id_token');
-                const isAuthenticated = localStorage.getItem('is_authenticated');
-                
-                debugLog('Auth status check:', {
-                    hasToken: !!token,
-                    hasIdToken: !!idToken,
-                    isAuthenticated: isAuthenticated
-                });
-                
-                // Simple check - if we have the flag and at least one token
-                if (isAuthenticated === 'true' && (token || idToken)) {
-                    return true;
-                }
-                
-                // If no tokens in localStorage, clear any partial state
-                clearAuthData();
-                return false;
-            } catch (error) {
-                console.error('Error checking auth status:', error);
-                return false;
-            }
-        }
-        
-        // Clear auth data (logout)
-        function clearAuthData() {
-            debugLog('Clearing auth data');
-            try {
-                // Clear localStorage
-                localStorage.removeItem('auth_token');
-                localStorage.removeItem('id_token');
-                localStorage.removeItem('expires_at');
-                localStorage.removeItem('user_info');
-                localStorage.removeItem('is_authenticated');
-                
-                // Clear cookies
-                document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-                document.cookie = "id_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-                document.cookie = "is_authenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-                
-                debugLog('Auth data cleared');
-                return true;
-            } catch (error) {
-                console.error('Error clearing auth data:', error);
-                return false;
-            }
-        }
-        
-        // Login with Auth0 Lock
+        // Show Auth0 Lock
         function login() {
-            try {
-                if (!lock) {
-                    showError("Authentication service not ready. Please reload the page.");
-                    return;
-                }
-                
-                debugLog("Showing Auth0 Lock");
+            if (lock) {
                 lock.show();
-            } catch (error) {
-                console.error("Error showing Auth0 Lock:", error);
-                showError("Error starting login process: " + error.message);
-                
-                // Re-enable login button
-                const loginButton = document.getElementById('login-button');
-                loginButton.disabled = false;
-                loginButton.textContent = 'Sign In';
+            } else {
+                showError("Authentication service not available");
             }
         }
         
@@ -482,81 +337,22 @@
         // Auth0 login handling
         loginButton.addEventListener('click', () => {
             if (termsCheckbox.checked) {
-                debugLog("Login button clicked, initiating Auth0 login");
-                
-                // Prevent multiple clicks
-                loginButton.disabled = true;
-                loginButton.textContent = 'Signing in...';
-                
-                // Clear any existing auth data first to avoid conflicts
-                clearAuthData();
-                
-                // Show Auth0 Lock
-                try {
-                    login();
-                } catch (error) {
-                    console.error("Error in login process:", error);
-                    // Re-enable the button if login fails
-                    loginButton.disabled = !termsCheckbox.checked;
-                    loginButton.textContent = 'Sign In';
-                    showError("Error during login: " + error.message);
-                }
+                login();
             }
         });
         
         // Initialize when the page loads
         document.addEventListener('DOMContentLoaded', () => {
-            debugLog("Login page loaded");
-            
-            // Check current URL
-            const currentUrl = window.location.href;
-            const currentPath = window.location.pathname;
-            debugLog('Current URL:', currentUrl);
-            debugLog('Current path:', currentPath);
-            
-            // Check auth status for debugging only
-            const isAuthenticated = checkAuthStatus();
-            debugLog('Is authenticated (client-side):', isAuthenticated);
-            
             // Initialize Auth0 Lock
-            if (typeof Auth0Lock === 'function') {
-                initAuth0Lock();
-            } else {
-                window.addEventListener('load', () => {
-                    setTimeout(() => {
-                        if (typeof Auth0Lock === 'function') {
-                            initAuth0Lock();
-                        } else {
-                            console.error("Auth0Lock failed to load");
-                            showError("Authentication service failed to load. Please refresh the page.");
-                        }
-                    }, 500);
-                });
-            }
+            initAuth0Lock();
             
-            // This code will run on the login page only - no need to check URL
+            // Check for errors in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const error = urlParams.get('error');
+            const errorDescription = urlParams.get('error_description');
             
-            // Check for error parameters in URL
-            checkForErrors();
-            
-            // Add debug button (visible only in debug mode)
-            if (DEBUG) {
-                const debugControls = document.createElement('div');
-                debugControls.style.marginTop = '20px';
-                
-                // Create clear auth button
-                const clearAuthButton = document.createElement('button');
-                clearAuthButton.textContent = 'Clear Auth Data';
-                clearAuthButton.className = 'auth0-btn';
-                clearAuthButton.style.fontSize = '0.9rem';
-                clearAuthButton.style.padding = '5px 10px';
-                clearAuthButton.addEventListener('click', () => {
-                    clearAuthData();
-                    debugLog('Manually cleared auth data');
-                });
-                
-                debugControls.appendChild(clearAuthButton);
-                document.querySelector('.login-container').appendChild(debugControls);
+            if (error) {
+                showError(errorDescription || `Login error: ${error}`);
             }
         });
     </script>
