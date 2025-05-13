@@ -233,9 +233,30 @@
                 lock.on('authenticated', function(authResult) {
                     console.log('Authenticated!', authResult);
                     
-                    // Store token and redirect
-                    localStorage.setItem('auth_token', authResult.accessToken);
-                    window.location.href = '/';
+                    // Store tokens properly
+                    if (authResult && authResult.accessToken) {
+                        localStorage.setItem('auth_token', authResult.accessToken);
+                    }
+                    
+                    if (authResult && authResult.idToken) {
+                        localStorage.setItem('id_token', authResult.idToken);
+                    }
+                    
+                    // Store expiration time if available
+                    if (authResult && authResult.expiresIn) {
+                        const expiresAt = JSON.stringify(
+                            authResult.expiresIn * 1000 + new Date().getTime()
+                        );
+                        localStorage.setItem('expires_at', expiresAt);
+                    }
+                    
+                    console.log('Authentication complete, redirecting to home');
+                    
+                    // Add a small delay before redirecting
+                    setTimeout(function() {
+                        // Use the appropriate main page path - adjust this to match your site structure
+                        window.location.href = '/index.html';
+                    }, 300);
                 });
                 
                 // Handle authentication error
@@ -275,14 +296,50 @@
         
         // Check if user is authenticated
         function checkAuthStatus() {
-            // Simple check for token - you might want a more robust check
+            // Improved token validation
             const token = localStorage.getItem('auth_token');
+            const idToken = localStorage.getItem('id_token');
+            const expiresAt = localStorage.getItem('expires_at');
+            
+            console.log('Checking auth status:', {
+                hasAccessToken: !!token,
+                hasIdToken: !!idToken,
+                hasExpiry: !!expiresAt
+            });
+            
+            // Check if token exists and is not expired
             if (token) {
-                console.log("User has auth token, redirecting to home page");
-                window.location.href = '/';
+                if (expiresAt) {
+                    const expired = new Date().getTime() > JSON.parse(expiresAt);
+                    if (expired) {
+                        console.log('Token expired, clearing and staying on login page');
+                        clearAuthData();
+                        return false;
+                    }
+                }
+                
+                console.log('User has valid auth token');
                 return true;
             }
+            
+            console.log('No valid auth token found, staying on login page');
             return false;
+        }
+        
+        // Clear auth data (logout)
+        function clearAuthData() {
+            console.log('Clearing auth data');
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('id_token');
+            localStorage.removeItem('expires_at');
+        }
+        
+        // Logout function
+        function logout() {
+            clearAuthData();
+            
+            // Force reload the page to clear any cached state
+            window.location.reload();
         }
         
         // Login with Auth0 Lock
@@ -362,24 +419,39 @@
         document.addEventListener('DOMContentLoaded', () => {
             console.log("Login page loaded");
             
-            // Check if already authenticated
-            if (!checkAuthStatus()) {
-                // Initialize Auth0 Lock
-                if (typeof Auth0Lock === 'function') {
-                    initAuth0Lock();
-                } else {
-                    console.log("Auth0Lock not loaded yet, waiting for script");
-                    window.addEventListener('load', () => {
-                        setTimeout(() => {
-                            if (typeof Auth0Lock === 'function') {
-                                initAuth0Lock();
-                            } else {
-                                console.error("Auth0Lock failed to load");
-                                showError("Authentication service failed to load. Please refresh the page.");
-                            }
-                        }, 500);
-                    });
-                }
+            // Check if we're on the login page but should be redirected to main page
+            const currentPath = window.location.pathname;
+            console.log('Current path:', currentPath);
+            
+            // Check for login page path
+            const isLoginPage = currentPath.includes('login.html') || 
+                               (currentPath === '/' && document.title.includes('Login'));
+            
+            console.log('Is login page:', isLoginPage);
+            
+            // Only redirect if we're authenticated and on the login page
+            if (isLoginPage && checkAuthStatus()) {
+                console.log('Already authenticated, redirecting to main page');
+                // Use the appropriate main page path - adjust this to match your site structure
+                window.location.href = '/index.html';
+                return;
+            }
+            
+            // Initialize Auth0 Lock
+            if (typeof Auth0Lock === 'function') {
+                initAuth0Lock();
+            } else {
+                console.log("Auth0Lock not loaded yet, waiting for script");
+                window.addEventListener('load', () => {
+                    setTimeout(() => {
+                        if (typeof Auth0Lock === 'function') {
+                            initAuth0Lock();
+                        } else {
+                            console.error("Auth0Lock failed to load");
+                            showError("Authentication service failed to load. Please refresh the page.");
+                        }
+                    }, 500);
+                });
             }
             
             // Check for errors
