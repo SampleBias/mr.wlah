@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mr. Wlah | Logged Out</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
+    <style>
+        .logout-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 40px;
+            background-color: var(--dark-bg);
+            border: var(--pixel-border);
+            border-radius: 4px;
+            text-align: center;
+            margin-top: 50px;
+        }
+        
+        .logout-title {
+            font-size: 3rem;
+            letter-spacing: 2px;
+            color: var(--primary-color);
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+            margin-bottom: 5px;
+        }
+        
+        .logout-subtitle {
+            font-size: 1.4rem;
+            letter-spacing: 1px;
+            color: var(--secondary-color);
+            margin-bottom: 40px;
+        }
+        
+        .logout-message {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            color: var(--text-color);
+        }
+        
+        .logout-thank-you {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            color: var(--text-color);
+            line-height: 1.5;
+        }
+        
+        .login-again-btn {
+            padding: 12px 30px;
+            background-color: var(--light-bg);
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+            font-family: 'VT323', monospace;
+            font-size: 1.4rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .login-again-btn:hover {
+            background-color: var(--primary-color);
+            color: var(--dark-bg);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>Mr. Wlah</h1>
+                <p class="tagline">Write Like A Human</p>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="how-to-use.html">How to Use</a></li>
+                    <li><a href="index.html">Home</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <div class="logout-container">
+                <h1 class="logout-title">Mr. Wlah</h1>
+                <p class="logout-subtitle">Write Like A Human</p>
+                
+                <h2 class="logout-message">You've been logged out</h2>
+                
+                <p class="logout-thank-you">
+                    Thank you for using Mr. Wlah to transform your AI-generated text into human-like content.
+                    We hope to see you again soon!
+                </p>
+                
+                <a href="/login" class="login-again-btn">Log In Again</a>
+            </div>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; <span id="current-year"></span> Mr. Wlah | Powered by Google Gemini</p>
+    </footer>
+
+    <script>
+        // Set current year in footer
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+        
+        // Complete Auth0 logout if needed
+        function completeAuth0Logout() {
+            // Get Auth0 domain and client ID from URL parameters (if they exist)
+            const urlParams = new URLSearchParams(window.location.search);
+            const auth0Domain = urlParams.get('auth0Domain') || localStorage.getItem('auth0Domain');
+            const clientId = urlParams.get('clientId') || localStorage.getItem('auth0ClientId');
+            
+            // Clear any remaining Auth0 cookies or tokens
+            if (auth0Domain && clientId) {
+                const returnTo = encodeURIComponent(window.location.origin);
+                const logoutUrl = `https://${auth0Domain}/v2/logout?client_id=${clientId}&returnTo=${returnTo}`;
+                
+                // For demo purposes, we'll just clear any local storage
+                localStorage.removeItem('demo_is_authenticated');
+                localStorage.removeItem('demo_user');
+                localStorage.removeItem('auth0Domain');
+                localStorage.removeItem('auth0ClientId');
+            }
+        }
+        
+        // Run on page load
+        completeAuth0Logout();
+    </script>
+</body>
+</html> 

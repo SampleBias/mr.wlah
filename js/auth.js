@@ -20,6 +20,10 @@ async function initAuth0() {
             audience: window.MrWlahConfig.auth0.audience,
             cacheLocation: 'localstorage'
         };
+        
+        // Store for logout purposes
+        localStorage.setItem('auth0Domain', auth0Config.domain);
+        localStorage.setItem('auth0ClientId', auth0Config.clientId);
     }
     
     // This would be the actual Auth0 initialization in production
@@ -75,10 +79,16 @@ async function updateUI() {
     const isAuthenticated = await auth0Client.isAuthenticated();
     const loginBtn = document.getElementById('login-btn');
     
+    // Skip if on login page
+    if (!loginBtn) return;
+    
     if (isAuthenticated) {
         const user = await auth0Client.getUser();
         loginBtn.textContent = 'Logout';
-        loginBtn.onclick = () => logout();
+        loginBtn.onclick = (e) => {
+            e.preventDefault();
+            logout();
+        };
         
         // Create a user profile element if it doesn't exist
         if (!document.getElementById('user-profile')) {
@@ -138,11 +148,8 @@ async function login() {
 async function logout() {
     try {
         console.log('Logging out...');
-        await auth0Client.logout({
-            logoutParams: {
-                returnTo: window.location.origin
-            }
-        });
+        // For API-based logout with full Auth0 logout
+        window.location.href = '/api/auth/logout?full_logout=true';
     } catch (error) {
         console.error('Logout error:', error);
     }

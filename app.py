@@ -1,6 +1,6 @@
 import os
 import sys
-from flask import Flask, request, jsonify, render_template, send_from_directory, send_file
+from flask import Flask, request, jsonify, render_template, send_from_directory, send_file, url_for, redirect, session
 from flask_cors import CORS
 from dotenv import load_dotenv
 import google.genai as genai
@@ -18,6 +18,7 @@ import io
 import tempfile
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from urllib.parse import urlencode
 
 # Import database logging functions
 try:
@@ -37,6 +38,12 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__, static_folder='.')
 CORS(app)
+
+# Configure session
+app.secret_key = os.getenv('SESSION_SECRET', os.urandom(24))
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = False
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=24)
 
 # Configure Google Gemini API
 api_key = os.getenv('GEMINI_API_KEY')
@@ -342,7 +349,15 @@ app.json_encoder = JSONEncoder
 # Routes
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    return send_file('index.html')
+
+@app.route('/login')
+def login_page():
+    return send_file('login.html')
+
+@app.route('/logout')
+def logout_page():
+    return send_file('logout.html')
 
 @app.route('/<path:path>')
 def serve_static(path):
@@ -533,77 +548,86 @@ def get_user_transformations():
 # Auth0 routes
 @app.route('/api/auth/login')
 def login():
-    add_system_log("Login attempt initiated")
-    return auth0.authorize_redirect(
-        redirect_uri=os.getenv('AUTH0_CALLBACK_URL')
-    )
+    # First check if the request is from our login page
+    referrer = request.referrer
+    if referrer and '/login' in referrer:
+        return auth0.authorize_redirect(redirect_uri=url_for('callback', _external=True))
+    else:
+        # For API calls or other sources, return the login URL
+        return jsonify({
+            'login_url': url_for('login_page', _external=True)
+        })
 
 @app.route('/api/auth/callback')
 def callback():
-    try:
-        token = auth0.authorize_access_token()
-        user_info = auth0.get('userinfo').json()
-        
-        # Log user login
-        log_user_activity(
-            user_info['sub'], 
-            "LOGIN", 
-            {"name": user_info.get('name'), "email": user_info.get('email')}
-        )
-        
-        # Store user in MongoDB if configured
-        if users_collection is not None:
-            try:
-                current_time = datetime.datetime.now()
-                
-                # Check if user exists
-                existing_user = users_collection.find_one({"auth0Id": user_info['sub']})
-                
-                # Update or insert user
+    # Get the auth0 token
+    auth0.authorize_access_token()
+    resp = auth0.get('userinfo')
+    userinfo = resp.json()
+    
+    # Store user info in session
+    session['jwt_payload'] = userinfo
+    session['profile'] = {
+        'user_id': userinfo['sub'],
+        'name': userinfo.get('name', ''),
+        'picture': userinfo.get('picture', ''),
+        'email': userinfo.get('email', '')
+    }
+    session['logged_in'] = True
+    
+    # Log the successful authentication
+    add_system_log(f"User authenticated: {userinfo.get('name', 'Unknown')} ({userinfo.get('email', 'No email')})")
+    
+    if users_collection:
+        try:
+            # Check if user exists
+            user = users_collection.find_one({'auth0_id': userinfo['sub']})
+            
+            # If not, create user record
+            if not user:
+                new_user = {
+                    'auth0_id': userinfo['sub'],
+                    'email': userinfo.get('email', ''),
+                    'name': userinfo.get('name', ''),
+                    'created_at': datetime.datetime.now(),
+                    'last_login': datetime.datetime.now()
+                }
+                users_collection.insert_one(new_user)
+                add_system_log(f"New user created: {userinfo.get('email', 'No email')}")
+            else:
+                # Update last login
                 users_collection.update_one(
-                    {'auth0Id': user_info['sub']},
-                    {'$set': {
-                        'email': user_info.get('email'),
-                        'name': user_info.get('name'),
-                        'lastLogin': current_time
-                    }, '$setOnInsert': {
-                        'createdAt': current_time,
-                        'usageCount': 0,
-                        'preferences': {
-                            'defaultTone': 'casual',
-                            'saveHistory': True
-                        }
-                    }},
-                    upsert=True
+                    {'auth0_id': userinfo['sub']},
+                    {'$set': {'last_login': datetime.datetime.now()}}
                 )
-                
-                # Log whether this was a new user or returning user
-                if not existing_user:
-                    add_system_log(f"New user created: {user_info.get('email')}", "INFO")
-                else:
-                    add_system_log(f"Returning user: {user_info.get('email')}", "INFO")
-            except Exception as db_error:
-                # Log the error but continue with login
-                add_system_log(f"Error storing user data: {str(db_error)}", "ERROR")
-        else:
-            add_system_log("User login successful, but user data not stored (MongoDB not configured)", "WARNING")
-        
-        # Return user info
-        return jsonify(user_info)
-    except Exception as e:
-        error_msg = f"Login error: {str(e)}"
-        add_system_log(error_msg, "ERROR")
-        return jsonify({"error": "Authentication failed"}), 401
+        except Exception as e:
+            add_system_log(f"Error updating user record: {str(e)}", "ERROR")
+    
+    # Redirect to homepage
+    return redirect('/')
 
 @app.route('/api/auth/logout')
 def logout():
-    user_id = request.args.get('userId')
-    
-    if user_id:
-        log_user_activity(user_id, "LOGOUT")
-    
     # Clear session
-    return jsonify({'message': 'Logged out successfully'})
+    session.clear()
+    
+    # Log the logout
+    add_system_log("User logged out")
+    
+    # Check if full Auth0 logout is required
+    full_logout = request.args.get('full_logout', 'false').lower() == 'true'
+    
+    if full_logout:
+        # Build the logout URL for Auth0
+        params = {
+            'returnTo': url_for('logout_page', _external=True),
+            'client_id': os.getenv('AUTH0_CLIENT_ID')
+        }
+        logout_url = f"https://{os.getenv('AUTH0_DOMAIN')}/v2/logout?" + urlencode(params)
+        return redirect(logout_url)
+    else:
+        # Just redirect to logout page
+        return redirect('/logout')
 
 @app.route('/api/document/generate', methods=['POST'])
 def generate_document():

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mr. Wlah | Login</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
+    <!-- Auth0 SDK -->
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+    <style>
+        .login-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 40px;
+            background-color: var(--dark-bg);
+            border: var(--pixel-border);
+            border-radius: 4px;
+            text-align: center;
+            margin-top: 50px;
+        }
+        
+        .login-title {
+            font-size: 3rem;
+            letter-spacing: 2px;
+            color: var(--primary-color);
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+            margin-bottom: 5px;
+        }
+        
+        .login-subtitle {
+            font-size: 1.4rem;
+            letter-spacing: 1px;
+            color: var(--secondary-color);
+            margin-bottom: 40px;
+        }
+        
+        .login-heading {
+            font-size: 1.8rem;
+            margin-bottom: 30px;
+            color: var(--text-color);
+        }
+        
+        .terms-checkbox {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+            gap: 10px;
+        }
+        
+        .terms-checkbox input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background-color: var(--light-bg);
+            border: 1px solid var(--primary-color);
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .terms-checkbox input[type="checkbox"]::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            width: 12px;
+            height: 12px;
+            background-color: var(--primary-color);
+            transition: all 0.2s ease;
+        }
+        
+        .terms-checkbox input[type="checkbox"]:checked::before {
+            transform: translate(-50%, -50%) scale(1);
+        }
+        
+        .terms-checkbox label {
+            font-size: 1.1rem;
+            cursor: pointer;
+        }
+        
+        .terms-checkbox a {
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .terms-checkbox a:hover {
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.7);
+        }
+        
+        .auth0-btn {
+            padding: 12px 30px;
+            background-color: var(--light-bg);
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+            font-family: 'VT323', monospace;
+            font-size: 1.4rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+        }
+        
+        .auth0-btn:hover {
+            background-color: var(--primary-color);
+            color: var(--dark-bg);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+        }
+        
+        .auth0-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>Mr. Wlah</h1>
+                <p class="tagline">Write Like A Human</p>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="how-to-use.html">How to Use</a></li>
+                    <li><a href="index.html">Home</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <div class="login-container">
+                <h1 class="login-title">Mr. Wlah</h1>
+                <p class="login-subtitle">Write Like A Human</p>
+                
+                <h2 class="login-heading">Sign in to continue</h2>
+                
+                <div class="terms-checkbox">
+                    <input type="checkbox" id="terms-checkbox">
+                    <label for="terms-checkbox">I agree to the <a href="#" id="terms-link">Terms of Use</a></label>
+                </div>
+                
+                <button id="login-button" class="auth0-btn" disabled>Sign In with Auth0</button>
+            </div>
+        </main>
+        
+        <!-- Terms Modal -->
+        <div id="terms-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Terms of Use</h2>
+                <div class="terms-content">
+                    <p>By using Mr. Wlah, you agree to the following terms:</p>
+                    <ul>
+                        <li>You will use this service for lawful purposes only</li>
+                        <li>You are responsible for all content you generate using this service</li>
+                        <li>Your data may be processed to provide the service functionality</li>
+                        <li>We may update these terms from time to time</li>
+                        <li>We reserve the right to terminate service to any user violating these terms</li>
+                    </ul>
+                    <p>For more information, please contact support.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; <span id="current-year"></span> Mr. Wlah | Powered by Google Gemini</p>
+    </footer>
+
+    <script>
+        // Set current year in footer
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+        
+        // Terms modal functionality
+        const termsModal = document.getElementById('terms-modal');
+        const termsLink = document.getElementById('terms-link');
+        const closeBtn = document.querySelector('.close');
+        
+        termsLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            termsModal.style.display = 'block';
+        });
+        
+        closeBtn.addEventListener('click', () => {
+            termsModal.style.display = 'none';
+        });
+        
+        window.addEventListener('click', (e) => {
+            if (e.target === termsModal) {
+                termsModal.style.display = 'none';
+            }
+        });
+        
+        // Checkbox and login button functionality
+        const termsCheckbox = document.getElementById('terms-checkbox');
+        const loginButton = document.getElementById('login-button');
+        
+        termsCheckbox.addEventListener('change', () => {
+            loginButton.disabled = !termsCheckbox.checked;
+        });
+        
+        // Auth0 login handling
+        loginButton.addEventListener('click', async () => {
+            if (termsCheckbox.checked) {
+                try {
+                    // Initialize Auth0 client if not already done
+                    if (!window.auth0Client) {
+                        await initAuth0();
+                    }
+                    
+                    // Redirect to Auth0 login
+                    await auth0Client.loginWithRedirect();
+                } catch (error) {
+                    console.error('Login error:', error);
+                }
+            }
+        });
+        
+        // Import auth.js for Auth0 functionality
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
+        // Load necessary scripts
+        async function loadDependencies() {
+            await loadScript('js/config.js');
+            await loadScript('js/auth.js');
+        }
+        
+        loadDependencies();
+    </script>
+</body>
+</html> 
