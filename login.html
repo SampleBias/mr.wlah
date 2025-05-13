@@ -194,35 +194,49 @@
         // Initialize Auth0 client
         async function initAuth0() {
             try {
+                // For debugging
+                console.log("Current URL:", window.location.href);
+                
                 // Fetch Auth0 configuration from server or define it here
-                // You'll need to replace these values with your actual Auth0 domain and client ID
                 const auth0Config = {
                     domain: 'dev-pblqfit7lbhgifgs.us.auth0.com',
                     client_id: 'i44iiEKNOT4KeBSLpflce2rSrlsofvPO',
                     redirect_uri: window.location.origin,
-                    audience: null,
                     cacheLocation: 'localstorage'
                 };
+                
+                console.log("Creating Auth0 client with config:", JSON.stringify(auth0Config));
+                console.log("Redirect URI:", window.location.origin);
                 
                 auth0Client = await createAuth0Client({
                     domain: auth0Config.domain,
                     clientId: auth0Config.client_id,
                     authorizationParams: {
-                        redirect_uri: auth0Config.redirect_uri,
-                        audience: auth0Config.audience
+                        redirect_uri: auth0Config.redirect_uri
                     },
                     cacheLocation: auth0Config.cacheLocation
                 });
                 
                 // Check for the code and state parameters
                 if (window.location.search.includes("code=") && window.location.search.includes("state=")) {
-                    // Handle the redirect and retrieve tokens
-                    await auth0Client.handleRedirectCallback();
-                    // Clear the URL parameters
-                    window.history.replaceState({}, document.title, '/');
-                    // Check if authenticated and redirect
-                    if (await auth0Client.isAuthenticated()) {
-                        window.location.href = '/';
+                    console.log("Auth0 redirect detected, handling callback");
+                    try {
+                        // Handle the redirect and retrieve tokens
+                        const result = await auth0Client.handleRedirectCallback();
+                        console.log("Redirect callback handled successfully", result);
+                        
+                        // Clear the URL parameters
+                        window.history.replaceState({}, document.title, '/');
+                        
+                        // Check if authenticated and redirect
+                        if (await auth0Client.isAuthenticated()) {
+                            const user = await auth0Client.getUser();
+                            console.log("User authenticated after redirect:", user);
+                            window.location.href = '/';
+                        }
+                    } catch (callbackError) {
+                        console.error("Error handling redirect callback:", callbackError);
+                        showError("Error processing login response: " + callbackError.message);
                     }
                 }
                 
@@ -263,20 +277,49 @@
         async function login() {
             try {
                 console.log("Starting login process...");
-                // Display the Auth0 login modal
-                await auth0Client.loginWithPopup({
-                    // Optional parameters
-                    // scope: 'openid profile email',
-                    // prompt: 'login' // Always prompt for login, even if user is already authenticated
-                });
                 
-                // If login successful, redirect to home
-                if (await auth0Client.isAuthenticated()) {
-                    window.location.href = '/';
+                // Try redirect login instead of popup if popup is causing issues
+                const useRedirect = true; // Set to false to use popup
+                
+                if (useRedirect) {
+                    console.log("Using redirect login flow");
+                    await auth0Client.loginWithRedirect({
+                        redirect_uri: window.location.origin,
+                        scope: 'openid profile email'
+                    });
+                    // The page will redirect, so no need for additional code here
+                    return;
+                } else {
+                    // Popup login flow
+                    console.log("Using popup login flow");
+                    await auth0Client.loginWithPopup({
+                        scope: 'openid profile email'
+                    });
+                    
+                    // If login successful, redirect to home
+                    if (await auth0Client.isAuthenticated()) {
+                        console.log("Authentication successful, redirecting to home");
+                        window.location.href = '/';
+                    }
                 }
             } catch (error) {
                 console.error("Login error:", error);
-                showError("Login failed. Please try again.");
+                let errorMessage = "Login failed. ";
+                
+                // More detailed error information
+                if (error.message) {
+                    errorMessage += error.message;
+                }
+                
+                if (error.error_description) {
+                    errorMessage += " " + error.error_description;
+                }
+                
+                if (error.name) {
+                    console.error("Error name:", error.name);
+                }
+                
+                showError(errorMessage);
             }
         }
         
