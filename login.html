@@ -317,40 +317,25 @@
             }
         }
         
-        // Check if user is authenticated
+        // Check if user is authenticated - simplified for reliability
         function checkAuthStatus() {
-            // Get all auth data
-            const token = localStorage.getItem('auth_token');
-            const idToken = localStorage.getItem('id_token');
-            const expiresAt = localStorage.getItem('expires_at');
-            const isAuthenticated = localStorage.getItem('is_authenticated');
-            
-            console.log('Checking auth status:', {
-                hasAccessToken: !!token,
-                hasIdToken: !!idToken,
-                hasExpiry: !!expiresAt,
-                isAuthenticated: isAuthenticated
-            });
-            
-            // More strict validation
-            if (isAuthenticated === 'true' && token && idToken) {
-                // Verify token expiration
-                if (expiresAt) {
-                    const expired = new Date().getTime() > JSON.parse(expiresAt);
-                    if (expired) {
-                        console.log('Token expired, clearing auth data');
-                        clearAuthData();
-                        return false;
-                    }
-                }
+            try {
+                const token = localStorage.getItem('auth_token');
+                const idToken = localStorage.getItem('id_token');
+                const isAuthenticated = localStorage.getItem('is_authenticated');
                 
-                console.log('User has valid auth tokens');
-                return true;
+                console.log('Auth check:', {
+                    hasToken: !!token,
+                    hasIdToken: !!idToken,
+                    isAuthenticated: isAuthenticated
+                });
+                
+                // Simple check - if we have the flag and at least one token
+                return isAuthenticated === 'true' && (token || idToken);
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+                return false;
             }
-            
-            console.log('No valid auth tokens found');
-            clearAuthData(); // Clear any partial auth data
-            return false;
         }
         
         // Clear auth data (logout)
@@ -366,14 +351,6 @@
             } catch (error) {
                 console.error('Error clearing auth data:', error);
             }
-        }
-        
-        // Logout function
-        function logout() {
-            clearAuthData();
-            
-            // Force reload the page to clear any cached state
-            window.location.href = '/login';
         }
         
         // Login with Auth0 Lock
@@ -449,19 +426,15 @@
             }
         });
         
-        // Initialize when the page loads
+        // CRITICAL: Only run authentication check and redirects on the login page
+        // This prevents redirect loops
         document.addEventListener('DOMContentLoaded', () => {
-            console.log("Login page loaded");
+            console.log("Page loaded");
             
-            // Check current location
-            const currentPath = window.location.pathname;
-            console.log('Current path:', currentPath);
-            
-            // Initialize Auth0 Lock first
+            // Initialize Auth0 Lock
             if (typeof Auth0Lock === 'function') {
                 initAuth0Lock();
             } else {
-                console.log("Auth0Lock not loaded yet, waiting for script");
                 window.addEventListener('load', () => {
                     setTimeout(() => {
                         if (typeof Auth0Lock === 'function') {
@@ -474,22 +447,30 @@
                 });
             }
             
-            // Check if we're on the login page
-            const isLoginPage = currentPath.includes('/login');
+            // Get current path and script name
+            const currentPath = window.location.pathname;
+            const isLoginPage = currentPath.endsWith('/login') || 
+                                currentPath.endsWith('/login.html') || 
+                                document.title.includes('Login');
             
-            // Only perform redirects if not already on the correct page
+            console.log('Current path:', currentPath);
+            console.log('Is login page:', isLoginPage);
+            
+            // Only check auth status and redirect on login page
             if (isLoginPage) {
-                // If on login page, check if already authenticated
+                console.log('On login page, checking if already authenticated');
+                
+                // If authenticated and on login page, redirect to home
                 if (checkAuthStatus()) {
-                    console.log('Authenticated user on login page, redirecting to home');
+                    console.log('Already authenticated, redirecting to home page');
                     window.location.href = '/';
+                } else {
+                    console.log('Not authenticated, staying on login page');
                 }
             } else {
-                // If not on login page, make sure user is authenticated
-                if (!checkAuthStatus()) {
-                    console.log('Unauthenticated user not on login page, redirecting to login');
-                    window.location.href = '/login';
-                }
+                // IMPORTANT: This script is on the login page, so no need to redirect back
+                // to login if unauthenticated on other pages
+                console.log('Not on login page, not checking auth status');
             }
             
             // Check for errors
