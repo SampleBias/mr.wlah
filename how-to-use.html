@@ -6,7 +6,8 @@
     <title>How to Use | Mr. Wlah</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
-    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <style>
         .how-to-use-page {
             padding: 40px;
@@ -93,6 +94,10 @@
             background-color: var(--primary-color);
             color: var(--dark-bg);
         }
+        
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -103,9 +108,8 @@
                 <p class="tagline">Write Like A Human</p>
             </div>
             <nav>
-                <ul>
-                    <li><a href="index.html">Home</a></li>
-                    <li><a href="#" id="login-btn">Login</a></li>
+                <ul id="nav-links">
+                    <!-- Dynamic navigation items will be added by JavaScript -->
                 </ul>
             </nav>
         </header>
@@ -201,7 +205,7 @@
                     </ul>
                 </div>
                 
-                <a href="index.html" class="back-link">← Back to Application</a>
+                <a href="index.html" id="back-to-app" class="back-link hidden">← Back to Application</a>
             </div>
         </main>
     </div>
@@ -217,7 +221,7 @@
     </div>
 
     <footer>
-        <p>&copy; <span id="current-year"></span> Mr. Wlah | Powered by Google Gemini</p>
+        <p>&copy; <span id="current-year"></span> Mr. Wlah | Write Like A Human</p>
     </footer>
 
     <script>
@@ -225,14 +229,52 @@
         document.getElementById('current-year').textContent = new Date().getFullYear();
         
         // Modal handling
-        const loginBtn = document.getElementById('login-btn');
         const loginModal = document.getElementById('login-modal');
         const closeButton = document.querySelector('.close');
+        const navLinks = document.getElementById('nav-links');
+        const backToAppLink = document.getElementById('back-to-app');
         
-        loginBtn.addEventListener('click', () => {
-            loginModal.style.display = 'block';
-        });
+        // Check authentication status and update UI accordingly
+        async function checkAuthAndUpdateUI() {
+            try {
+                const response = await fetch('/api/auth/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Clear existing nav links
+                    navLinks.innerHTML = '';
+                    
+                    if (data.isAuthenticated) {
+                        // User is logged in, show Home and Logout links
+                        navLinks.innerHTML = `
+                            <li><a href="index.html">Home</a></li>
+                            <li><a href="/api/auth/logout" id="logout-btn">Logout</a></li>
+                        `;
+                        
+                        // Show the Back to Application link
+                        backToAppLink.classList.remove('hidden');
+                    } else {
+                        // User is not logged in, show login link
+                        navLinks.innerHTML = `
+                            <li><a href="#" id="login-btn">Login</a></li>
+                        `;
+                        
+                        // Hide the Back to Application link
+                        backToAppLink.classList.add('hidden');
+                        
+                        // Add event listener to login button
+                        document.getElementById('login-btn').addEventListener('click', (e) => {
+                            e.preventDefault();
+                            window.location.href = '/api/auth/login';
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking authentication status:', error);
+            }
+        }
         
+        // Close the login modal
         closeButton.addEventListener('click', () => {
             loginModal.style.display = 'none';
         });
@@ -242,6 +284,9 @@
                 loginModal.style.display = 'none';
             }
         });
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', checkAuthAndUpdateUI);
     </script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>

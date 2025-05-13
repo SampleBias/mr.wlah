@@ -117,6 +117,38 @@
     <script>
         // Set current year in footer
         document.getElementById('current-year').textContent = new Date().getFullYear();
+        
+        // Check authentication status and update login/logout buttons
+        async function checkAuthStatus() {
+            try {
+                console.log("Checking auth status...");
+                const response = await fetch('/api/auth/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log("Auth status response:", data);
+                    
+                    // Get login button
+                    const loginBtn = document.getElementById('login-btn');
+                    
+                    if (data.isAuthenticated) {
+                        console.log("User is authenticated");
+                        // Update login button to be logout
+                        loginBtn.textContent = 'Logout';
+                        loginBtn.setAttribute('href', '/api/auth/logout');
+                    } else {
+                        console.log("User is not authenticated");
+                        // Ensure login button is set correctly
+                        loginBtn.textContent = 'Login';
+                        loginBtn.setAttribute('href', '/login');
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+            }
+        }
+        
+        // Run auth check when page loads
+        document.addEventListener('DOMContentLoaded', checkAuthStatus);
     </script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
