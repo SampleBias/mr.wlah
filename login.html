@@ -159,7 +159,7 @@
                     <label for="terms-checkbox">I agree to the <a href="#" id="terms-link">Terms of Use</a></label>
                 </div>
                 
-                <button id="login-button" class="auth0-btn" disabled>Sign In with Auth0</button>
+                <button id="login-button" class="auth0-btn" disabled>Sign In</button>
             </div>
         </main>
         
@@ -188,47 +188,100 @@
     </footer>
 
     <script>
-        // Set current year in footer
-        document.getElementById('current-year').textContent = new Date().getFullYear();
+        // Auth0 configuration
+        let auth0Client = null;
         
-        // Check for URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const error = urlParams.get('error');
-        
-        // Display error message if present
-        if (error) {
-            const errorMessage = document.getElementById('error-message');
-            errorMessage.style.display = 'block';
-            
-            if (error === 'callback_failed') {
-                errorMessage.textContent = 'There was an error logging in. Please try again.';
-            } else {
-                errorMessage.textContent = `Login error: ${error}`;
-            }
-            
-            console.error("Login error:", error);
-        }
-        
-        // Check if user is already authenticated, but only do this once
-        async function checkAuthStatus() {
-            console.log("Checking auth status...");
+        // Initialize Auth0 client
+        async function initAuth0() {
             try {
-                const response = await fetch('/api/auth/status');
-                const data = await response.json();
+                // Fetch Auth0 configuration from server or define it here
+                // You'll need to replace these values with your actual Auth0 domain and client ID
+                const auth0Config = {
+                    domain: 'dev-pblqfit7lbhgifgs.us.auth0.com',
+                    client_id: 'i44iiEKNOT4KeBSLpflce2rSrlsofvPO',
+                    redirect_uri: window.location.origin,
+                    audience: null,
+                    cacheLocation: 'localstorage'
+                };
                 
-                if (data.isAuthenticated) {
+                auth0Client = await createAuth0Client({
+                    domain: auth0Config.domain,
+                    clientId: auth0Config.client_id,
+                    authorizationParams: {
+                        redirect_uri: auth0Config.redirect_uri,
+                        audience: auth0Config.audience
+                    },
+                    cacheLocation: auth0Config.cacheLocation
+                });
+                
+                // Check for the code and state parameters
+                if (window.location.search.includes("code=") && window.location.search.includes("state=")) {
+                    // Handle the redirect and retrieve tokens
+                    await auth0Client.handleRedirectCallback();
+                    // Clear the URL parameters
+                    window.history.replaceState({}, document.title, '/');
+                    // Check if authenticated and redirect
+                    if (await auth0Client.isAuthenticated()) {
+                        window.location.href = '/';
+                    }
+                }
+                
+                // Check if user is already authenticated
+                const isAuthenticated = await auth0Client.isAuthenticated();
+                if (isAuthenticated) {
                     console.log("User is already authenticated, redirecting to home page");
                     window.location.href = '/';
-                    return true;
-                } else {
-                    console.log("User is not authenticated, continuing with login page");
-                    return false;
                 }
+                
+                console.log("Auth0 client initialized successfully");
             } catch (error) {
-                console.error('Error checking authentication status:', error);
-                return false;
+                console.error("Error initializing Auth0 client:", error);
+                showError("Error initializing authentication. Please try again.");
             }
         }
+        
+        // Helper to show error messages
+        function showError(message) {
+            const errorElement = document.getElementById('error-message');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+        
+        // Check URL for error parameters
+        function checkForErrors() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const error = urlParams.get('error');
+            const errorDescription = urlParams.get('error_description');
+            
+            if (error) {
+                showError(errorDescription || `Login error: ${error}`);
+                console.error("Login error:", error, errorDescription);
+            }
+        }
+        
+        // Login with Auth0
+        async function login() {
+            try {
+                console.log("Starting login process...");
+                // Display the Auth0 login modal
+                await auth0Client.loginWithPopup({
+                    // Optional parameters
+                    // scope: 'openid profile email',
+                    // prompt: 'login' // Always prompt for login, even if user is already authenticated
+                });
+                
+                // If login successful, redirect to home
+                if (await auth0Client.isAuthenticated()) {
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error("Login error:", error);
+                showError("Login failed. Please try again.");
+            }
+        }
+        
+        // Set current year in footer
+        document.getElementById('current-year').textContent = new Date().getFullYear();
         
         // Terms modal functionality
         const termsModal = document.getElementById('terms-modal');
@@ -261,21 +314,26 @@
         // Auth0 login handling
         loginButton.addEventListener('click', () => {
             if (termsCheckbox.checked) {
-                console.log("Login button clicked, redirecting to server-side Auth0 login");
+                console.log("Login button clicked, initiating Auth0 login");
                 
                 // Prevent multiple clicks
                 loginButton.disabled = true;
-                loginButton.textContent = 'Redirecting...';
+                loginButton.textContent = 'Signing in...';
                 
-                // Direct server-side login
-                window.location.href = '/api/auth/login';
+                // Use Auth0 SPA SDK login
+                login().finally(() => {
+                    // Re-enable the button if login doesn't redirect
+                    loginButton.disabled = !termsCheckbox.checked;
+                    loginButton.textContent = 'Sign In';
+                });
             }
         });
         
-        // Initialize the login page
+        // Initialize the Auth0 client when the page loads
         document.addEventListener('DOMContentLoaded', () => {
-            console.log("Login page loaded, checking authentication status");
-            checkAuthStatus();
+            console.log("Login page loaded, initializing Auth0");
+            initAuth0();
+            checkForErrors();
         });
     </script>
 </body>
