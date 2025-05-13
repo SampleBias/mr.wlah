@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#121224" stroke="#00f0ff" stroke-width="2"/>
+  
+  <!-- MW letters in the app's cyan brand color -->
+  <text x="32" y="38" font-family="monospace, VT323" font-size="28" font-weight="bold" fill="#00f0ff" text-anchor="middle">MW</text>
+  
+  <!-- Small pixel/dot effect -->
+  <rect x="16" y="48" width="3" height="3" fill="#00f0ff"/>
+  <rect x="44" y="48" width="3" height="3" fill="#00f0ff"/>
+</svg> 
