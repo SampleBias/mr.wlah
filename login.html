@@ -211,13 +211,10 @@
         loginButton.addEventListener('click', async () => {
             if (termsCheckbox.checked) {
                 try {
-                    // Initialize Auth0 client if not already done
-                    if (!window.auth0Client) {
-                        await initAuth0();
-                    }
+                    console.log("Login button clicked, redirecting to Auth0");
                     
-                    // Redirect to Auth0 login
-                    await auth0Client.loginWithRedirect();
+                    // Direct server-side login
+                    window.location.href = '/api/auth/login';
                 } catch (error) {
                     console.error('Login error:', error);
                 }
@@ -238,10 +235,33 @@
         // Load necessary scripts
         async function loadDependencies() {
             await loadScript('js/config.js');
+            
+            // Wait for configuration to load
+            if (!window.MrWlahConfig || !window.MrWlahConfig.auth0 || !window.MrWlahConfig.auth0.domain) {
+                console.log("Waiting for configuration to load...");
+                
+                return new Promise((resolve) => {
+                    window.addEventListener('mrwlah-config-loaded', () => {
+                        console.log("Configuration loaded, continuing with Auth0 initialization");
+                        resolve();
+                    }, { once: true });
+                    
+                    // Timeout after 5 seconds
+                    setTimeout(() => {
+                        console.log("Configuration loading timed out");
+                        resolve();
+                    }, 5000);
+                });
+            }
+            
             await loadScript('js/auth.js');
         }
         
-        loadDependencies();
+        loadDependencies().then(() => {
+            console.log("All dependencies loaded");
+        }).catch(err => {
+            console.error("Error loading dependencies:", err);
+        });
     </script>
 </body>
 </html> 

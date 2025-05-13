@@ -119,6 +119,7 @@ auth0 = oauth.register(
     client_kwargs={
         'scope': 'openid profile email',
     },
+    server_metadata_url=f"https://{os.getenv('AUTH0_DOMAIN')}/.well-known/openid-configuration"
 )
 
 # Helper function to clean LLM output
@@ -349,6 +350,9 @@ app.json_encoder = JSONEncoder
 # Routes
 @app.route('/')
 def index():
+    # Check if user is logged in
+    if not session.get('logged_in'):
+        return redirect('/login')
     return send_file('index.html')
 
 @app.route('/login')
@@ -548,63 +552,68 @@ def get_user_transformations():
 # Auth0 routes
 @app.route('/api/auth/login')
 def login():
-    # First check if the request is from our login page
-    referrer = request.referrer
-    if referrer and '/login' in referrer:
-        return auth0.authorize_redirect(redirect_uri=url_for('callback', _external=True))
-    else:
-        # For API calls or other sources, return the login URL
-        return jsonify({
-            'login_url': url_for('login_page', _external=True)
-        })
+    # Log the login attempt
+    add_system_log("Login attempt initiated")
+    
+    # Redirect to Auth0 for authentication
+    return auth0.authorize_redirect(
+        redirect_uri=url_for('callback', _external=True)
+    )
 
 @app.route('/api/auth/callback')
 def callback():
-    # Get the auth0 token
-    auth0.authorize_access_token()
-    resp = auth0.get('userinfo')
-    userinfo = resp.json()
-    
-    # Store user info in session
-    session['jwt_payload'] = userinfo
-    session['profile'] = {
-        'user_id': userinfo['sub'],
-        'name': userinfo.get('name', ''),
-        'picture': userinfo.get('picture', ''),
-        'email': userinfo.get('email', '')
-    }
-    session['logged_in'] = True
-    
-    # Log the successful authentication
-    add_system_log(f"User authenticated: {userinfo.get('name', 'Unknown')} ({userinfo.get('email', 'No email')})")
-    
-    if users_collection:
-        try:
-            # Check if user exists
-            user = users_collection.find_one({'auth0_id': userinfo['sub']})
-            
-            # If not, create user record
-            if not user:
-                new_user = {
-                    'auth0_id': userinfo['sub'],
-                    'email': userinfo.get('email', ''),
-                    'name': userinfo.get('name', ''),
-                    'created_at': datetime.datetime.now(),
-                    'last_login': datetime.datetime.now()
-                }
-                users_collection.insert_one(new_user)
-                add_system_log(f"New user created: {userinfo.get('email', 'No email')}")
-            else:
-                # Update last login
-                users_collection.update_one(
-                    {'auth0_id': userinfo['sub']},
-                    {'$set': {'last_login': datetime.datetime.now()}}
-                )
-        except Exception as e:
-            add_system_log(f"Error updating user record: {str(e)}", "ERROR")
-    
-    # Redirect to homepage
-    return redirect('/')
+    try:
+        # Get the auth0 token
+        auth0.authorize_access_token()
+        resp = auth0.get('userinfo')
+        userinfo = resp.json()
+        
+        add_system_log(f"Auth0 callback received for user: {userinfo.get('email', 'Unknown')}")
+        
+        # Store user info in session
+        session['jwt_payload'] = userinfo
+        session['profile'] = {
+            'user_id': userinfo['sub'],
+            'name': userinfo.get('name', ''),
+            'picture': userinfo.get('picture', ''),
+            'email': userinfo.get('email', '')
+        }
+        session['logged_in'] = True
+        
+        # Log the successful authentication
+        add_system_log(f"User authenticated: {userinfo.get('name', 'Unknown')} ({userinfo.get('email', 'No email')})")
+        
+        # Handle user record in database if configured
+        if users_collection:
+            try:
+                # Check if user exists
+                user = users_collection.find_one({'auth0_id': userinfo['sub']})
+                
+                # If not, create user record
+                if not user:
+                    new_user = {
+                        'auth0_id': userinfo['sub'],
+                        'email': userinfo.get('email', ''),
+                        'name': userinfo.get('name', ''),
+                        'created_at': datetime.datetime.now(),
+                        'last_login': datetime.datetime.now()
+                    }
+                    users_collection.insert_one(new_user)
+                    add_system_log(f"New user created: {userinfo.get('email', 'No email')}")
+                else:
+                    # Update last login
+                    users_collection.update_one(
+                        {'auth0_id': userinfo['sub']},
+                        {'$set': {'last_login': datetime.datetime.now()}}
+                    )
+            except Exception as e:
+                add_system_log(f"Error updating user record: {str(e)}", "ERROR")
+        
+        # Redirect to homepage
+        return redirect('/')
+    except Exception as e:
+        add_system_log(f"Auth0 callback error: {str(e)}", "ERROR")
+        return redirect('/login')
 
 @app.route('/api/auth/logout')
 def logout():
@@ -802,6 +811,42 @@ def generate_odt(text):
         error_msg = f"ODT generation error: {str(e)}"
         add_system_log(error_msg, "ERROR")
         return jsonify({'error': error_msg}), 500
+
+@app.route('/api/auth/status')
+def auth_status():
+    """Endpoint to check if user is authenticated"""
+    is_authenticated = 'logged_in' in session and session['logged_in']
+    
+    if is_authenticated:
+        profile = session.get('profile', {})
+        return jsonify({
+            'isAuthenticated': True,
+            'user': {
+                'name': profile.get('name', ''),
+                'email': profile.get('email', ''),
+                'picture': profile.get('picture', '')
+            }
+        })
+    else:
+        return jsonify({
+            'isAuthenticated': False
+        })
+
+@app.route('/api/config')
+def client_config():
+    """Endpoint to provide client-side configuration"""
+    return jsonify({
+        'auth0': {
+            'domain': os.getenv('AUTH0_DOMAIN'),
+            'clientId': os.getenv('AUTH0_CLIENT_ID'),
+            'audience': os.getenv('AUTH0_AUDIENCE', 'https://api.mrwlah.com'),
+            'callbackUrl': f"{request.host_url.rstrip('/')}/api/auth/callback"
+        },
+        'app': {
+            'environment': os.getenv('FLASK_ENV', 'production'),
+            'apiBaseUrl': '/api'
+        }
+    })
 
 if __name__ == '__main__':
     try:

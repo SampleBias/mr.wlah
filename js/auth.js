@@ -26,50 +26,65 @@ async function initAuth0() {
         localStorage.setItem('auth0ClientId', auth0Config.clientId);
     }
     
-    // This would be the actual Auth0 initialization in production
-    /*
-    auth0Client = await createAuth0Client({
-        domain: auth0Config.domain,
-        clientId: auth0Config.clientId,
-        authorizationParams: {
-            redirect_uri: auth0Config.redirectUri,
-            audience: auth0Config.audience
-        },
-        cacheLocation: auth0Config.cacheLocation
-    });
-    */
-    
-    // For demo purposes, simulate Auth0 client
-    auth0Client = {
-        isAuthenticated: async () => {
-            return localStorage.getItem('demo_is_authenticated') === 'true';
-        },
-        loginWithRedirect: async () => {
-            console.log('Would redirect to Auth0 login in production');
-            // Simulate successful login for demo
-            localStorage.setItem('demo_is_authenticated', 'true');
-            localStorage.setItem('demo_user', JSON.stringify({
-                name: 'Demo User',
-                email: 'demo@example.com',
-                picture: 'https://via.placeholder.com/50'
-            }));
-            // Refresh the page to simulate redirect back
-            setTimeout(() => window.location.reload(), 1000);
-        },
-        logout: async () => {
-            console.log('Would logout from Auth0 in production');
-            localStorage.removeItem('demo_is_authenticated');
-            localStorage.removeItem('demo_user');
-            // Refresh the page to simulate redirect back
-            setTimeout(() => window.location.reload(), 1000);
-        },
-        getUser: async () => {
-            return JSON.parse(localStorage.getItem('demo_user')) || null;
-        },
-        getTokenSilently: async () => {
-            return 'demo_token_' + Math.random().toString(36).substring(2);
+    // Initialize actual Auth0 client
+    try {
+        console.log('Initializing Auth0 client with:', {
+            domain: auth0Config.domain,
+            clientId: auth0Config.clientId,
+            redirectUri: auth0Config.redirectUri
+        });
+        
+        auth0Client = await createAuth0Client({
+            domain: auth0Config.domain,
+            clientId: auth0Config.clientId,
+            authorizationParams: {
+                redirect_uri: auth0Config.redirectUri,
+                audience: auth0Config.audience
+            },
+            cacheLocation: auth0Config.cacheLocation
+        });
+        
+        console.log('Auth0 client initialized successfully');
+        
+        // Check if we're handling a callback
+        if (window.location.search.includes("code=") && window.location.search.includes("state=")) {
+            console.log('Handling Auth0 callback');
+            try {
+                await auth0Client.handleRedirectCallback();
+                // Handle successful login
+                window.history.replaceState({}, document.title, window.location.pathname); // Remove query params
+                console.log('Auth0 callback handled successfully');
+            } catch (callbackErr) {
+                console.error('Error handling callback:', callbackErr);
+            }
         }
-    };
+    } catch (initError) {
+        console.error('Error initializing Auth0 client:', initError);
+        
+        // Fall back to demo client if initialization fails
+        auth0Client = {
+            isAuthenticated: async () => {
+                return localStorage.getItem('demo_is_authenticated') === 'true';
+            },
+            loginWithRedirect: async () => {
+                console.log('Fallback: Would redirect to Auth0 login in production');
+                // Direct server-side login as backup
+                window.location.href = '/api/auth/login';
+            },
+            logout: async () => {
+                console.log('Fallback: Would logout from Auth0 in production');
+                localStorage.removeItem('demo_is_authenticated');
+                localStorage.removeItem('demo_user');
+                window.location.href = '/api/auth/logout?full_logout=true';
+            },
+            getUser: async () => {
+                return JSON.parse(localStorage.getItem('demo_user')) || null;
+            },
+            getTokenSilently: async () => {
+                return 'demo_token_' + Math.random().toString(36).substring(2);
+            }
+        };
+    }
     
     updateUI();
 }

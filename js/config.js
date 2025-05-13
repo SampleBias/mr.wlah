@@ -1,8 +1,8 @@
 /**
  * Configuration file for Mr. Wlah application
  * 
- * In a production environment, these values would be loaded from environment variables
- * using a .env file or environment variables set on the server.
+ * In a production environment, these values are loaded from environment variables
+ * on the server and then securely passed to the client.
  */
 
 // Configuration object for the application
@@ -35,33 +35,56 @@ const config = {
     }
 };
 
-/**
- * For client-side applications, you would typically only expose 
- * a subset of these configurations that are safe for client exposure.
- * Sensitive keys like database URIs should remain server-side only.
- */
-const clientConfig = {
-    gemini: {
-        apiUrl: config.gemini.apiUrl
-    },
+// Default configuration (will be overridden with server values)
+let clientConfig = {
     auth0: {
-        domain: config.auth0.domain,
-        clientId: config.auth0.clientId,
-        audience: config.auth0.audience,
-        callbackUrl: config.auth0.callbackUrl
+        domain: '',
+        clientId: '',
+        audience: 'https://api.mrwlah.com',
+        callbackUrl: window.location.origin + '/api/auth/callback'
     },
     app: {
-        environment: config.app.environment,
-        apiBaseUrl: config.app.apiBaseUrl
+        environment: 'development',
+        apiBaseUrl: '/api'
     }
 };
 
-// In a browser environment, expose only the client configuration
-if (typeof window !== 'undefined') {
-    window.MrWlahConfig = clientConfig;
+// Function to fetch configuration from the server
+async function loadServerConfig() {
+    try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+            const config = await response.json();
+            // Update client config with server values
+            clientConfig = config;
+            console.log('Server configuration loaded successfully');
+            
+            // Make it available globally
+            window.MrWlahConfig = clientConfig;
+            
+            // Dispatch event to notify that config is loaded
+            window.dispatchEvent(new CustomEvent('mrwlah-config-loaded'));
+        } else {
+            console.error('Failed to load server configuration');
+        }
+    } catch (error) {
+        console.error('Error loading server configuration:', error);
+    }
 }
 
-// In a Node.js environment, export the full configuration
+// In a browser environment, expose the client configuration
+if (typeof window !== 'undefined') {
+    window.MrWlahConfig = clientConfig;
+    
+    // Load configuration from server when the page loads
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadServerConfig);
+    } else {
+        loadServerConfig();
+    }
+}
+
+// In a Node.js environment, export the configuration
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = config;
+    module.exports = clientConfig;
 } 
