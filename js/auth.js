@@ -26,126 +26,90 @@ async function initAuth0() {
         localStorage.setItem('auth0ClientId', auth0Config.clientId);
     }
     
-    // Initialize actual Auth0 client
+    // Check if we need user info from server
     try {
-        console.log('Initializing Auth0 client with:', {
-            domain: auth0Config.domain,
-            clientId: auth0Config.clientId,
-            redirectUri: auth0Config.redirectUri
-        });
-        
-        auth0Client = await createAuth0Client({
-            domain: auth0Config.domain,
-            clientId: auth0Config.clientId,
-            authorizationParams: {
-                redirect_uri: auth0Config.redirectUri,
-                audience: auth0Config.audience
-            },
-            cacheLocation: auth0Config.cacheLocation
-        });
-        
-        console.log('Auth0 client initialized successfully');
-        
-        // Check if we're handling a callback
-        if (window.location.search.includes("code=") && window.location.search.includes("state=")) {
-            console.log('Handling Auth0 callback');
-            try {
-                await auth0Client.handleRedirectCallback();
-                // Handle successful login
-                window.history.replaceState({}, document.title, window.location.pathname); // Remove query params
-                console.log('Auth0 callback handled successfully');
-            } catch (callbackErr) {
-                console.error('Error handling callback:', callbackErr);
+        // Query authentication status from server
+        const response = await fetch('/api/auth/status');
+        if (response.ok) {
+            const authStatus = await response.json();
+            console.log('Auth status from server:', authStatus);
+            
+            // If we're authenticated on the server, proceed with UI update
+            if (authStatus.isAuthenticated) {
+                // Update UI with server-provided user info
+                updateUIWithServerAuth(authStatus.user);
+                return;
             }
         }
-    } catch (initError) {
-        console.error('Error initializing Auth0 client:', initError);
-        
-        // Fall back to demo client if initialization fails
-        auth0Client = {
-            isAuthenticated: async () => {
-                return localStorage.getItem('demo_is_authenticated') === 'true';
-            },
-            loginWithRedirect: async () => {
-                console.log('Fallback: Would redirect to Auth0 login in production');
-                // Direct server-side login as backup
-                window.location.href = '/api/auth/login';
-            },
-            logout: async () => {
-                console.log('Fallback: Would logout from Auth0 in production');
-                localStorage.removeItem('demo_is_authenticated');
-                localStorage.removeItem('demo_user');
-                window.location.href = '/api/auth/logout?full_logout=true';
-            },
-            getUser: async () => {
-                return JSON.parse(localStorage.getItem('demo_user')) || null;
-            },
-            getTokenSilently: async () => {
-                return 'demo_token_' + Math.random().toString(36).substring(2);
-            }
-        };
+    } catch (statusError) {
+        console.error('Error checking server auth status:', statusError);
     }
     
-    updateUI();
+    // If not authenticated via server, redirect to login
+    console.log('Not authenticated via server, checking login state...');
+    updateUIUnauthenticated();
 }
 
-// Update UI based on authentication state
-async function updateUI() {
-    const isAuthenticated = await auth0Client.isAuthenticated();
+// Update UI when authenticated via server
+function updateUIWithServerAuth(user) {
     const loginBtn = document.getElementById('login-btn');
-    
-    // Skip if on login page
     if (!loginBtn) return;
     
-    if (isAuthenticated) {
-        const user = await auth0Client.getUser();
-        loginBtn.textContent = 'Logout';
-        loginBtn.onclick = (e) => {
-            e.preventDefault();
-            logout();
-        };
+    loginBtn.textContent = 'Logout';
+    loginBtn.onclick = (e) => {
+        e.preventDefault();
+        logout();
+    };
+    
+    // Create a user profile element if it doesn't exist
+    if (!document.getElementById('user-profile')) {
+        const headerNav = document.querySelector('nav ul');
+        const profileItem = document.createElement('li');
+        profileItem.innerHTML = `
+            <div id="user-profile" class="user-profile">
+                <img src="${user.picture}" alt="${user.name}" class="profile-pic">
+                <span>${user.name}</span>
+            </div>
+        `;
+        headerNav.prepend(profileItem);
         
-        // Create a user profile element if it doesn't exist
-        if (!document.getElementById('user-profile')) {
-            const headerNav = document.querySelector('nav ul');
-            const profileItem = document.createElement('li');
-            profileItem.innerHTML = `
-                <div id="user-profile" class="user-profile">
-                    <img src="${user.picture}" alt="${user.name}" class="profile-pic">
-                    <span>${user.name}</span>
-                </div>
-            `;
-            headerNav.prepend(profileItem);
-            
-            // Add styles for the user profile
-            const style = document.createElement('style');
-            style.textContent = `
-                .user-profile {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    padding: 5px;
-                    border: 1px solid var(--primary-color);
-                    border-radius: 4px;
-                }
-                .profile-pic {
-                    width: 30px;
-                    height: 30px;
-                    border-radius: 50%;
-                    border: 1px solid var(--primary-color);
-                }
-            `;
-            document.head.appendChild(style);
-        }
-    } else {
-        loginBtn.textContent = 'Login';
-        loginBtn.onclick = () => login();
-        
-        // Remove user profile if it exists
-        const userProfile = document.getElementById('user-profile');
-        if (userProfile) {
-            userProfile.parentNode.remove();
-        }
+        // Add styles for the user profile
+        const style = document.createElement('style');
+        style.textContent = `
+            .user-profile {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 5px;
+                border: 1px solid var(--primary-color);
+                border-radius: 4px;
+            }
+            .profile-pic {
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                border: 1px solid var(--primary-color);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// Update UI when not authenticated
+function updateUIUnauthenticated() {
+    const loginBtn = document.getElementById('login-btn');
+    if (!loginBtn) return;
+    
+    loginBtn.textContent = 'Login';
+    loginBtn.onclick = (e) => {
+        e.preventDefault();
+        login();
+    };
+    
+    // Remove user profile if it exists
+    const userProfile = document.getElementById('user-profile');
+    if (userProfile && userProfile.parentNode) {
+        userProfile.parentNode.remove();
     }
 }
 
@@ -153,7 +117,8 @@ async function updateUI() {
 async function login() {
     try {
         console.log('Logging in...');
-        await auth0Client.loginWithRedirect();
+        // Use server-side login flow
+        window.location.href = '/api/auth/login';
     } catch (error) {
         console.error('Login error:', error);
     }
@@ -163,7 +128,7 @@ async function login() {
 async function logout() {
     try {
         console.log('Logging out...');
-        // For API-based logout with full Auth0 logout
+        // Use server-side logout
         window.location.href = '/api/auth/logout?full_logout=true';
     } catch (error) {
         console.error('Logout error:', error);
@@ -173,7 +138,16 @@ async function logout() {
 // Get access token for API calls
 async function getAccessToken() {
     try {
-        return await auth0Client.getTokenSilently();
+        // Get auth status from server
+        const response = await fetch('/api/auth/status');
+        if (response.ok) {
+            const authStatus = await response.json();
+            if (authStatus.isAuthenticated) {
+                // Could implement token retrieval from server if needed
+                return 'server_auth_token';
+            }
+        }
+        return null;
     } catch (error) {
         console.error('Error getting token:', error);
         return null;
@@ -183,18 +157,15 @@ async function getAccessToken() {
 // Initialize Auth0 when the page loads
 document.addEventListener('DOMContentLoaded', initAuth0);
 
-// For MongoDB API requests with authentication
+// For API requests with authentication
 async function callSecureApi(url, method = 'GET', data = null) {
     try {
-        const token = await getAccessToken();
-        if (!token) throw new Error('Failed to get access token');
-        
         const options = {
             method,
             headers: {
-                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
-            }
+            },
+            credentials: 'include' // Include session cookies
         };
         
         if (data && (method === 'POST' || method === 'PUT')) {

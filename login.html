@@ -179,6 +179,25 @@
         // Set current year in footer
         document.getElementById('current-year').textContent = new Date().getFullYear();
         
+        // Check if user is already authenticated
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch('/api/auth/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.isAuthenticated) {
+                        // If already authenticated, redirect to home
+                        window.location.href = '/';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+            }
+        }
+        
+        // Check on page load
+        checkAuthStatus();
+        
         // Terms modal functionality
         const termsModal = document.getElementById('terms-modal');
         const termsLink = document.getElementById('terms-link');

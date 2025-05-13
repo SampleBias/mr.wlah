@@ -351,12 +351,27 @@ app.json_encoder = JSONEncoder
 @app.route('/')
 def index():
     # Check if user is logged in
-    if not session.get('logged_in'):
+    is_logged_in = 'logged_in' in session and session['logged_in']
+    
+    # Add debug logging
+    if is_logged_in:
+        user_info = session.get('profile', {})
+        add_system_log(f"User accessing homepage: {user_info.get('name', 'Unknown')}", "INFO")
+    else:
+        add_system_log("Unauthenticated user attempting to access homepage, redirecting to login", "INFO")
         return redirect('/login')
+    
+    # User is authenticated, serve the main application
     return send_file('index.html')
 
 @app.route('/login')
 def login_page():
+    # If user is already logged in, redirect to homepage
+    if 'logged_in' in session and session['logged_in']:
+        add_system_log("Authenticated user accessing login page, redirecting to homepage", "INFO")
+        return redirect('/')
+        
+    # Otherwise serve the login page
     return send_file('login.html')
 
 @app.route('/logout')
@@ -609,8 +624,11 @@ def callback():
             except Exception as e:
                 add_system_log(f"Error updating user record: {str(e)}", "ERROR")
         
-        # Redirect to homepage
-        return redirect('/')
+        # Debug log to trace the issue
+        add_system_log(f"Redirecting authenticated user to home page", "INFO")
+        
+        # Redirect to homepage with cache-busting parameter
+        return redirect('/?auth=' + datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
     except Exception as e:
         add_system_log(f"Auth0 callback error: {str(e)}", "ERROR")
         return redirect('/login')
@@ -824,7 +842,8 @@ def auth_status():
             'user': {
                 'name': profile.get('name', ''),
                 'email': profile.get('email', ''),
-                'picture': profile.get('picture', '')
+                'picture': profile.get('picture', ''),
+                'userId': profile.get('user_id', '')  # Include user ID for API calls
             }
         })
     else:
