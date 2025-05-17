@@ -412,6 +412,11 @@ def login_page():
         # Ensure session data persists
         session.modified = True
         
+        # Check if there's a redirect parameter
+        redirect_to = request.args.get('redirect')
+        if redirect_to == 'admin':
+            return redirect('/admin')
+        
         return redirect('/')
     
     # Check if there's an error parameter
@@ -473,7 +478,21 @@ ADMIN_PIN = os.getenv('ADMIN_PIN', '')  # Default for development only
 
 @app.route('/admin')
 def admin_panel():
-    """Serve the admin panel"""
+    """Serve the admin panel with authentication check"""
+    # First check if user is logged in at all
+    if 'logged_in' not in session or not session['logged_in']:
+        add_system_log("Unauthenticated user attempted to access admin panel", "WARNING")
+        # Redirect to login page with parameter to redirect back to admin after login
+        return redirect('/login?redirect=admin')
+    
+    # If user is logged in but not an admin, they need to enter the PIN
+    if not session.get('is_admin', False):
+        add_system_log(f"Authenticated user attempted to access admin panel without admin rights", "INFO")
+        # Serve the admin login page instead of the admin panel
+        return send_file('admin-login.html')
+    
+    # User is both authenticated and an admin
+    add_system_log(f"Admin user accessing admin panel", "INFO")
     return send_file('admin.html')
 
 @app.route('/api/admin/login', methods=['POST'])
