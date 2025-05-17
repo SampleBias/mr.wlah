@@ -7,7 +7,6 @@
 
 # MongoDB certificates and credentials
 certs/
-*.pem
 *.key
 *.cer
 *.crt
