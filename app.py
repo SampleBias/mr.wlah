@@ -673,20 +673,34 @@ def admin_grant_subscription(user_id):
     
     try:
         if users_collection:
+            # First try to find user by ID
+            user = users_collection.find_one({'$or': [
+                {'_id': ObjectId(user_id) if ObjectId.is_valid(user_id) else None},
+                {'user_id': user_id},
+                {'auth0Id': user_id}
+            ]})
+            
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+                
             # Update user subscription
-            users_collection.update_one(
-                {'_id': ObjectId(user_id)},
+            update_result = users_collection.update_one(
+                {'_id': user['_id']},
                 {'$set': {
                     'subscription': subscription,
                     'subscriptionUpdatedAt': datetime.datetime.utcnow()
                 }}
             )
             
-            add_system_log(f"Admin granted {subscription} subscription to user {user_id}", "INFO")
+            # Log the update
+            if update_result.modified_count > 0:
+                add_system_log(f"Admin granted {subscription} subscription to user {user_id} (name: {user.get('name', 'Unknown')})", "INFO")
+            else:
+                add_system_log(f"Admin attempted to grant {subscription} subscription to user {user_id}, but no changes were made", "WARNING")
             
             # Reset usage count if upgrading subscription
             users_collection.update_one(
-                {'_id': ObjectId(user_id)},
+                {'_id': user['_id']},
                 {'$set': {'usageCount': 0}}
             )
             
@@ -707,9 +721,19 @@ def admin_revoke_subscription(user_id):
     
     try:
         if users_collection:
+            # First try to find user by ID
+            user = users_collection.find_one({'$or': [
+                {'_id': ObjectId(user_id) if ObjectId.is_valid(user_id) else None},
+                {'user_id': user_id},
+                {'auth0Id': user_id}
+            ]})
+            
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+            
             # Update user subscription to FREE
-            users_collection.update_one(
-                {'_id': ObjectId(user_id)},
+            update_result = users_collection.update_one(
+                {'_id': user['_id']},
                 {'$set': {
                     'subscription': 'FREE',
                     'subscriptionUpdatedAt': datetime.datetime.utcnow(),
@@ -717,7 +741,12 @@ def admin_revoke_subscription(user_id):
                 }}
             )
             
-            add_system_log(f"Admin revoked subscription from user {user_id}", "INFO")
+            # Log the update
+            if update_result.modified_count > 0:
+                add_system_log(f"Admin revoked subscription from user {user_id} (name: {user.get('name', 'Unknown')})", "INFO")
+            else:
+                add_system_log(f"Admin attempted to revoke subscription from user {user_id}, but no changes were made", "WARNING")
+            
             return jsonify({'success': True})
         else:
             # Mock response for no DB
