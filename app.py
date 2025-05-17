@@ -1600,6 +1600,38 @@ def client_config():
         }
     })
 
+@app.route('/api/test/users-collection', methods=['GET'])
+def test_users_collection():
+    """Test if the 'users' collection is available and writable."""
+    try:
+        if users_collection is None:
+            return jsonify({'success': False, 'error': 'users_collection is None'}), 500
+        # Create a unique test user
+        test_email = f"test_user_{uuid.uuid4()}@example.com"
+        test_user = {
+            'auth0Id': f'test-auth0-{uuid.uuid4()}',
+            'user_id': f'test-auth0-{uuid.uuid4()}',
+            'email': test_email,
+            'name': 'Test User',
+            'createdAt': datetime.datetime.utcnow(),
+            'lastLogin': datetime.datetime.utcnow(),
+            'lastActive': datetime.datetime.utcnow(),
+            'subscription': 'FREE',
+            'usageCount': 0,
+            'preferences': {
+                'defaultTone': 'casual',
+                'saveHistory': True
+            }
+        }
+        # Insert the test user
+        result = users_collection.insert_one(test_user)
+        inserted_id = result.inserted_id
+        # Now delete the test user
+        users_collection.delete_one({'_id': inserted_id})
+        return jsonify({'success': True, 'message': 'users collection is available and writable'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # Add this function before the main block
 def migrate_existing_users():
     """
