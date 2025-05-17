@@ -287,7 +287,7 @@
                 debugInfo.textContent = "Fetching users from server...";
                 debugInfo.style.display = 'block';
                 
-                const response = await fetch('/api/admin/users');
+                const response = await fetch('/api/admin/users?recent=true');
                 
                 if (response.ok) {
                     const users = await response.json();
