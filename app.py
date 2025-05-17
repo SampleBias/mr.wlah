@@ -673,12 +673,14 @@ def admin_grant_subscription(user_id):
     
     try:
         if users_collection:
-            # First try to find user by ID
-            user = users_collection.find_one({'$or': [
-                {'_id': ObjectId(user_id) if ObjectId.is_valid(user_id) else None},
-                {'user_id': user_id},
-                {'auth0Id': user_id}
-            ]})
+            # First try to find user by user_id field (primary identifier)
+            user = users_collection.find_one({'user_id': user_id})
+            
+            # If not found, try other identifiers as fallback
+            if not user and ObjectId.is_valid(user_id):
+                user = users_collection.find_one({'_id': ObjectId(user_id)})
+            if not user:
+                user = users_collection.find_one({'auth0Id': user_id})
             
             if not user:
                 return jsonify({'error': 'User not found'}), 404
@@ -688,7 +690,8 @@ def admin_grant_subscription(user_id):
                 {'_id': user['_id']},
                 {'$set': {
                     'subscription': subscription,
-                    'subscriptionUpdatedAt': datetime.datetime.utcnow()
+                    'subscriptionUpdatedAt': datetime.datetime.utcnow(),
+                    'user_id': user.get('auth0Id', user_id)  # Ensure user_id is set
                 }}
             )
             
@@ -755,6 +758,103 @@ def admin_revoke_subscription(user_id):
         add_system_log(f"Error revoking subscription: {str(e)}", "ERROR")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/admin/user', methods=['POST'])
+def admin_add_user():
+    """Add or update a user manually"""
+    # Check if admin
+    if not session.get('is_admin', False):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.json
+    
+    # Validate required fields
+    required_fields = ['user_id', 'email', 'name', 'subscription']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'error': f'Missing required field: {field}'}), 400
+    
+    # Validate subscription type
+    subscription = data.get('subscription', '').upper()
+    if subscription not in SUBSCRIPTION_LIMITS:
+        return jsonify({'error': f'Invalid subscription type: {subscription}'}), 400
+    
+    try:
+        if users_collection:
+            # Check if user already exists
+            existing_user = users_collection.find_one({'user_id': data['user_id']})
+            
+            timestamp_now = datetime.datetime.utcnow()
+            
+            if existing_user:
+                # Update existing user
+                update_data = {
+                    'email': data['email'],
+                    'name': data['name'],
+                    'subscription': subscription,
+                    'subscriptionUpdatedAt': timestamp_now,
+                    'lastActive': timestamp_now
+                }
+                
+                # Add optional fields if provided
+                if 'usageCount' in data:
+                    update_data['usageCount'] = int(data['usageCount'])
+                
+                update_result = users_collection.update_one(
+                    {'_id': existing_user['_id']},
+                    {'$set': update_data}
+                )
+                
+                # Log the update
+                if update_result.modified_count > 0:
+                    add_system_log(f"Admin updated user: {data['user_id']} ({data['name']})", "INFO")
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'User updated successfully',
+                    'user_id': data['user_id']
+                })
+            else:
+                # Create new user
+                new_user = {
+                    'user_id': data['user_id'],
+                    'auth0Id': data['user_id'],  # Keep backward compatibility
+                    'email': data['email'],
+                    'name': data['name'],
+                    'createdAt': timestamp_now,
+                    'lastLogin': timestamp_now,
+                    'lastActive': timestamp_now,
+                    'subscription': subscription,
+                    'usageCount': int(data.get('usageCount', 0)),
+                    'subscriptionUpdatedAt': timestamp_now,
+                    'preferences': {
+                        'defaultTone': 'casual',
+                        'saveHistory': True
+                    },
+                    'manually_added': True
+                }
+                
+                insert_result = users_collection.insert_one(new_user)
+                
+                add_system_log(f"Admin manually added user: {data['user_id']} ({data['name']})", "INFO")
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'User added successfully',
+                    'user_id': data['user_id'],
+                    '_id': str(insert_result.inserted_id)
+                })
+        else:
+            # Mock response for no DB
+            return jsonify({
+                'success': True,
+                'demo': True,
+                'message': 'User would be added/updated (demo mode)',
+                'user_id': data['user_id']
+            })
+    except Exception as e:
+        add_system_log(f"Error adding/updating user: {str(e)}", "ERROR")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/user/subscription')
 def get_user_subscription():
     """Get current user's subscription info"""
@@ -768,11 +868,12 @@ def get_user_subscription():
     
     try:
         if users_collection:
-            # Get user from database - look for both user_id and auth0Id fields
-            user = users_collection.find_one({'$or': [
-                {'user_id': user_id},
-                {'auth0Id': user_id}
-            ]})
+            # Get user from database - prioritize user_id field
+            user = users_collection.find_one({'user_id': user_id})
+            
+            # Fallback to auth0Id if not found by user_id
+            if not user:
+                user = users_collection.find_one({'auth0Id': user_id})
             
             if user:
                 # Return subscription info
@@ -821,6 +922,7 @@ def get_user_subscription():
                     'lastResetDate': None,
                     'user_id': user_id
                 })
+                
         else:
             # Mock response for no DB
             return jsonify({
@@ -851,11 +953,12 @@ def record_transformation():
         timestamp = data.get('timestamp', datetime.datetime.utcnow().isoformat())
         
         if users_collection:
-            # Look for the user with both user_id and auth0Id fields
-            user = users_collection.find_one({'$or': [
-                {'user_id': user_id},
-                {'auth0Id': user_id}
-            ]})
+            # Prioritize looking for user by user_id
+            user = users_collection.find_one({'user_id': user_id})
+            
+            # Fallback to auth0Id if not found
+            if not user:
+                user = users_collection.find_one({'auth0Id': user_id})
             
             if user:
                 # Update existing user
@@ -925,7 +1028,12 @@ def transform_text():
     
     # Check if user has reached usage limit
     if users_collection:
+        # First look for user by user_id
         user = users_collection.find_one({'user_id': user_id})
+        
+        # If not found, fallback to auth0Id
+        if not user:
+            user = users_collection.find_one({'auth0Id': user_id})
         
         if user:
             subscription = user.get('subscription', 'FREE')
@@ -1161,21 +1269,23 @@ def callback():
         # Handle user record in database if configured
         if users_collection:
             try:
-                # Check if user exists - try both field formats (auth0Id and auth0_id)
+                # Get the user ID from Auth0
                 auth0_id = userinfo['sub']
-                user = users_collection.find_one({'$or': [
-                    {'auth0Id': auth0_id},
-                    {'auth0_id': auth0_id},
-                    {'user_id': auth0_id}
-                ]})
+                
+                # First try to find user by user_id field (primary identifier)
+                user = users_collection.find_one({'user_id': auth0_id})
+                
+                # If not found, try auth0Id as fallback
+                if not user:
+                    user = users_collection.find_one({'auth0Id': auth0_id})
                 
                 timestamp_now = datetime.datetime.now()
                 
                 # If not, create user record - use field names matching existing data in the db
                 if not user:
                     new_user = {
-                        'auth0Id': auth0_id,             # Use auth0Id to match existing db format
-                        'user_id': auth0_id,             # Also add user_id for admin panel
+                        'user_id': auth0_id,             # Primary identifier
+                        'auth0Id': auth0_id,             # For backward compatibility
                         'email': userinfo.get('email', ''),
                         'name': userinfo.get('name', ''),
                         'createdAt': timestamp_now,      # Match existing field format in db
@@ -1197,7 +1307,7 @@ def callback():
                     updates = {
                         'lastLogin': timestamp_now,   # Use matching db format
                         'lastActive': timestamp_now,  # Add for admin panel compatibility
-                        # Always ensure user_id exists and is equal to auth0Id
+                        # Always ensure user_id exists
                         'user_id': auth0_id
                     }
                     
