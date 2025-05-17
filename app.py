@@ -486,11 +486,27 @@ def admin_get_users():
     
     try:
         if users_collection:
+            # Fetch all users from the database
             users = list(users_collection.find())
             
             # Convert ObjectId to string for JSON serialization
             for user in users:
                 user['_id'] = str(user['_id'])
+                
+                # Fix field name differences for front-end compatibility
+                # Map auth0_id to user_id if needed for display
+                if 'auth0_id' in user and 'user_id' not in user:
+                    user['user_id'] = user['auth0_id']
+                
+                # Ensure required fields have default values
+                if 'subscription' not in user:
+                    user['subscription'] = 'FREE'
+                if 'usageCount' not in user:
+                    user['usageCount'] = 0
+                if 'lastActive' not in user and 'last_login' in user:
+                    user['lastActive'] = user['last_login']
+                elif 'lastActive' not in user:
+                    user['lastActive'] = user.get('created_at', None)
             
             add_system_log(f"Admin fetched user list ({len(users)} users)", "INFO")
             return jsonify(users)
@@ -535,6 +551,13 @@ def admin_grant_subscription(user_id):
             )
             
             add_system_log(f"Admin granted {subscription} subscription to user {user_id}", "INFO")
+            
+            # Reset usage count if upgrading subscription
+            users_collection.update_one(
+                {'_id': ObjectId(user_id)},
+                {'$set': {'usageCount': 0}}
+            )
+            
             return jsonify({'success': True})
         else:
             # Mock response for no DB
@@ -557,7 +580,8 @@ def admin_revoke_subscription(user_id):
                 {'_id': ObjectId(user_id)},
                 {'$set': {
                     'subscription': 'FREE',
-                    'subscriptionUpdatedAt': datetime.datetime.utcnow()
+                    'subscriptionUpdatedAt': datetime.datetime.utcnow(),
+                    'usageCount': 0  # Reset usage count
                 }}
             )
             
@@ -914,20 +938,41 @@ def callback():
                 
                 # If not, create user record
                 if not user:
+                    timestamp_now = datetime.datetime.now()
                     new_user = {
-                        'auth0_id': userinfo['sub'],
+                        'auth0_id': userinfo['sub'],           # Auth0 identifier
+                        'user_id': userinfo['sub'],            # Add user_id field for admin panel
                         'email': userinfo.get('email', ''),
                         'name': userinfo.get('name', ''),
-                        'created_at': datetime.datetime.now(),
-                        'last_login': datetime.datetime.now()
+                        'created_at': timestamp_now,
+                        'last_login': timestamp_now,
+                        'lastActive': timestamp_now,           # Add for admin panel compatibility
+                        'subscription': 'FREE',                # Default subscription
+                        'usageCount': 0,                       # Initialize usage counter
+                        'subscriptionUpdatedAt': timestamp_now # Add subscription date
                     }
                     users_collection.insert_one(new_user)
                     add_system_log(f"New user created: {userinfo.get('email', 'No email')}")
                 else:
-                    # Update last login
+                    # Update existing user
+                    updates = {
+                        'last_login': datetime.datetime.now(),
+                        'lastActive': datetime.datetime.now()
+                    }
+                    
+                    # Add user_id field if it doesn't exist
+                    if 'user_id' not in user:
+                        updates['user_id'] = userinfo['sub']
+                        
+                    # Add missing fields if they don't exist
+                    if 'subscription' not in user:
+                        updates['subscription'] = 'FREE'
+                    if 'usageCount' not in user:
+                        updates['usageCount'] = 0
+                        
                     users_collection.update_one(
                         {'auth0_id': userinfo['sub']},
-                        {'$set': {'last_login': datetime.datetime.now()}}
+                        {'$set': updates}
                     )
             except Exception as e:
                 add_system_log(f"Error updating user record: {str(e)}", "ERROR")

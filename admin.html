@@ -8,6 +8,72 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
     <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <style>
+        .no-users {
+            text-align: center;
+            padding: 20px;
+            color: var(--secondary-color);
+            font-size: 1.2rem;
+        }
+        
+        .admin-users-table {
+            margin-top: 20px;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .admin-users-table th, 
+        .admin-users-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .admin-users-table th {
+            background-color: var(--dark-bg);
+            color: var(--primary-color);
+            font-weight: normal;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .admin-btn {
+            padding: 5px 10px;
+            margin: 2px;
+            background-color: var(--dark-bg);
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            font-family: 'VT323', monospace;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .admin-btn.grant:hover {
+            background-color: var(--primary-color);
+            color: var(--dark-bg);
+        }
+        
+        .admin-btn.revoke {
+            border-color: var(--secondary-color);
+            color: var(--secondary-color);
+        }
+        
+        .admin-btn.revoke:hover {
+            background-color: var(--secondary-color);
+            color: var(--dark-bg);
+        }
+        
+        .debug-info {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: var(--dark-bg);
+            border: 1px solid var(--border-color);
+            font-family: monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -85,6 +151,14 @@
     <footer>
         <p>&copy; <span id="current-year"></span> Mr. Wlah | Admin Panel</p>
     </footer>
+
+    <!-- Add a debug info section at the end of the main section -->
+    <div id="debug-info" class="debug-info"></div>
+
+    <!-- Debug tools - add this above the closing </main> tag -->
+    <div class="debug-tools">
+        <button id="toggle-debug" class="admin-btn">Toggle Debug Info</button>
+    </div>
 
     <script>
         // Set current year in footer
@@ -175,15 +249,29 @@
         // Load users from the server
         async function loadUsers() {
             try {
+                const debugInfo = document.getElementById('debug-info');
+                
                 const response = await fetch('/api/admin/users');
                 if (response.ok) {
                     const users = await response.json();
+                    
+                    // Debug output
+                    debugInfo.textContent = `User Count: ${users.length}\n`;
+                    if (users.length > 0) {
+                        debugInfo.textContent += `First User: ${JSON.stringify(users[0], null, 2)}`;
+                    }
+                    
                     renderUsers(users);
                 } else {
                     console.error('Error loading users');
+                    debugInfo.textContent = `Error loading users: ${response.status} ${response.statusText}`;
+                    debugInfo.style.display = 'block';
                 }
             } catch (error) {
                 console.error('Error loading users:', error);
+                const debugInfo = document.getElementById('debug-info');
+                debugInfo.textContent = `Error: ${error.message}`;
+                debugInfo.style.display = 'block';
             }
         }
         
@@ -195,18 +283,41 @@
             // Get filter values
             const searchTerm = userSearch.value.toLowerCase();
             const planFilterValue = planFilter.value;
+
+            console.log("Rendering users:", users); // Debug log to see user data
+            
+            // Check if we have any users
+            if (!users || users.length === 0) {
+                usersTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="no-users">No users found. Make sure database connection is working properly.</td>
+                    </tr>
+                `;
+                return;
+            }
             
             // Filter users
             const filteredUsers = users.filter(user => {
                 const matchesSearch = 
-                    user.name?.toLowerCase().includes(searchTerm) || 
-                    user.email?.toLowerCase().includes(searchTerm);
+                    (user.name || '')?.toLowerCase().includes(searchTerm) || 
+                    (user.email || '')?.toLowerCase().includes(searchTerm);
                 
+                const userSubscription = (user.subscription || 'FREE').toLowerCase();
                 const matchesPlan = planFilterValue === 'all' || 
-                    user.subscription?.toLowerCase() === planFilterValue;
+                    userSubscription === planFilterValue;
                 
                 return matchesSearch && matchesPlan;
             });
+            
+            // Check if we have any filtered users
+            if (filteredUsers.length === 0) {
+                usersTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="no-users">No users match your search criteria.</td>
+                    </tr>
+                `;
+                return;
+            }
             
             // Add user rows
             filteredUsers.forEach(user => {
@@ -217,8 +328,11 @@
                 
                 // Determine usage display
                 const usageDisplay = user.subscription?.toUpperCase() === 'UNLIMITED' 
-                    ? `${user.usageCount} / ∞` 
-                    : `${user.usageCount} / ${getUserLimit(user.subscription)}`;
+                    ? `${user.usageCount || 0} / ∞` 
+                    : `${user.usageCount || 0} / ${getUserLimit(user.subscription)}`;
+                
+                // Set userId (support both user_id and _id)
+                const userId = user._id || '';
                 
                 row.innerHTML = `
                     <td>${user.name || 'Unknown'}</td>
@@ -227,10 +341,10 @@
                     <td>${usageDisplay}</td>
                     <td>${lastActive}</td>
                     <td class="admin-actions">
-                        <button class="admin-btn grant" data-user-id="${user._id}" data-action="grant-basic">Basic</button>
-                        <button class="admin-btn grant" data-user-id="${user._id}" data-action="grant-pro">Pro</button>
-                        <button class="admin-btn grant" data-user-id="${user._id}" data-action="grant-unlimited">Unlimited</button>
-                        <button class="admin-btn revoke" data-user-id="${user._id}" data-action="revoke">Revoke</button>
+                        <button class="admin-btn grant" data-user-id="${userId}" data-action="grant-basic">Basic</button>
+                        <button class="admin-btn grant" data-user-id="${userId}" data-action="grant-pro">Pro</button>
+                        <button class="admin-btn grant" data-user-id="${userId}" data-action="grant-unlimited">Unlimited</button>
+                        <button class="admin-btn revoke" data-user-id="${userId}" data-action="revoke">Revoke</button>
                     </td>
                 `;
                 
@@ -301,12 +415,27 @@
             loadUsers();
         });
         
-        // Check if already authenticated as admin
+        // Add this at the end of the script tag, just before the DOMContentLoaded event
+        document.getElementById('toggle-debug').addEventListener('click', () => {
+            const debugInfo = document.getElementById('debug-info');
+            if (debugInfo.style.display === 'block') {
+                debugInfo.style.display = 'none';
+            } else {
+                debugInfo.style.display = 'block';
+            }
+        });
+        
+        // Modify the checkAdminAuth function
         async function checkAdminAuth() {
             try {
+                const debugInfo = document.getElementById('debug-info');
                 const response = await fetch('/api/admin/status');
+                
+                debugInfo.textContent = `Admin status check response: ${response.status}\n`;
+                
                 if (response.ok) {
                     const data = await response.json();
+                    debugInfo.textContent += `Admin status data: ${JSON.stringify(data)}\n`;
                     
                     if (data.isAdmin) {
                         // Show dashboard
@@ -315,10 +444,19 @@
                         
                         // Load users
                         loadUsers();
+                    } else {
+                        debugInfo.textContent += "Not authenticated as admin. Please login.";
+                        debugInfo.style.display = 'block';
                     }
+                } else {
+                    debugInfo.textContent += `Error checking admin status: ${response.statusText}`;
+                    debugInfo.style.display = 'block';
                 }
             } catch (error) {
                 console.error('Error checking admin status:', error);
+                const debugInfo = document.getElementById('debug-info');
+                debugInfo.textContent = `Admin auth error: ${error.message}`;
+                debugInfo.style.display = 'block';
             }
         }
         
