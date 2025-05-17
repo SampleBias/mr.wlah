@@ -10,7 +10,7 @@ certs/
 *.key
 *.cer
 *.crt
-X509-cert-*.pem
+
 
 # Dependencies
 node_modules/
