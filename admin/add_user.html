@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Add User</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .nav {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .nav a {
+            margin-right: 15px;
+            text-decoration: none;
+            color: #333;
+            padding: 5px 10px;
+            border-radius: 3px;
+        }
+        .nav a:hover {
+            background-color: #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/admin">Dashboard</a>
+            <a href="/admin/add_user.html" style="font-weight: bold; background-color: #eee;">Add User</a>
+        </div>
+        
+        <h1>Add/Update User</h1>
+        
+        <div class="form-group">
+            <label for="userId">User ID (required)</label>
+            <input type="text" id="userId" placeholder="e.g., google-oauth2|107197189112098114209">
+            <small>This is the primary identifier for the user.</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="name">Name (required)</label>
+            <input type="text" id="name" placeholder="User's full name">
+        </div>
+        
+        <div class="form-group">
+            <label for="email">Email (required)</label>
+            <input type="email" id="email" placeholder="user@example.com">
+        </div>
+        
+        <div class="form-group">
+            <label for="subscription">Subscription (required)</label>
+            <select id="subscription">
+                <option value="FREE">FREE</option>
+                <option value="BASIC">BASIC</option>
+                <option value="PRO">PRO</option>
+                <option value="UNLIMITED">UNLIMITED</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="usageCount">Usage Count</label>
+            <input type="number" id="usageCount" min="0" value="0">
+        </div>
+        
+        <button id="submitBtn">Add/Update User</button>
+        
+        <div id="result" class="result" style="display: none;"></div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // First check if admin is logged in
+            fetch('/api/admin/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.isAdmin) {
+                        // Not logged in as admin, redirect to admin login
+                        window.location.href = '/admin';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking admin status:', error);
+                    document.getElementById('result').innerHTML = 'Error: Could not verify admin status.';
+                    document.getElementById('result').className = 'result error';
+                    document.getElementById('result').style.display = 'block';
+                });
+            
+            // Handle form submission
+            document.getElementById('submitBtn').addEventListener('click', function() {
+                // Get form values
+                const userId = document.getElementById('userId').value.trim();
+                const name = document.getElementById('name').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const subscription = document.getElementById('subscription').value;
+                const usageCount = document.getElementById('usageCount').value;
+                
+                // Validate required fields
+                if (!userId || !name || !email || !subscription) {
+                    document.getElementById('result').innerHTML = 'Error: All required fields must be filled.';
+                    document.getElementById('result').className = 'result error';
+                    document.getElementById('result').style.display = 'block';
+                    return;
+                }
+                
+                // Validate email format
+                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailPattern.test(email)) {
+                    document.getElementById('result').innerHTML = 'Error: Please enter a valid email address.';
+                    document.getElementById('result').className = 'result error';
+                    document.getElementById('result').style.display = 'block';
+                    return;
+                }
+                
+                // Create user data object
+                const userData = {
+                    user_id: userId,
+                    name: name,
+                    email: email,
+                    subscription: subscription,
+                    usageCount: parseInt(usageCount, 10)
+                };
+                
+                // Send API request
+                fetch('/api/admin/user', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(userData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('result').innerHTML = `Success: ${data.message} (User ID: ${data.user_id})`;
+                        document.getElementById('result').className = 'result success';
+                    } else {
+                        document.getElementById('result').innerHTML = `Error: ${data.error || 'Unknown error occurred'}`;
+                        document.getElementById('result').className = 'result error';
+                    }
+                    document.getElementById('result').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('result').innerHTML = 'Error: Could not add/update user.';
+                    document.getElementById('result').className = 'result error';
+                    document.getElementById('result').style.display = 'block';
+                });
+            });
+        });
+    </script>
+</body>
+</html> 

@@ -419,6 +419,13 @@ def logout_page():
 
 @app.route('/<path:path>')
 def serve_static(path):
+    # Check if this is an admin path first
+    if path.startswith('admin/'):
+        # Extract the file name from the path
+        admin_file = path.replace('admin/', '', 1)
+        return send_from_directory('admin', admin_file)
+    
+    # If not an admin path, serve from the root directory
     return send_from_directory('.', path)
 
 @app.route('/api/document/status', methods=['GET'])
@@ -482,11 +489,12 @@ def admin_login():
         # If we have a MongoDB connection, flag this user as an admin in the database
         if users_collection and admin_user_id:
             try:
-                # Try to find the user by auth0Id or user_id
-                user = users_collection.find_one({'$or': [
-                    {'auth0Id': admin_user_id},
-                    {'user_id': admin_user_id}
-                ]})
+                # First try to find user by user_id field (primary identifier)
+                user = users_collection.find_one({'user_id': admin_user_id})
+                
+                # If not found, try auth0Id as fallback
+                if not user:
+                    user = users_collection.find_one({'auth0Id': admin_user_id})
                 
                 if user:
                     # Update the user record to mark as admin
@@ -494,7 +502,8 @@ def admin_login():
                         {'_id': user['_id']},
                         {'$set': {
                             'is_admin': True,
-                            'lastAdminLogin': datetime.datetime.utcnow()
+                            'lastAdminLogin': datetime.datetime.utcnow(),
+                            'user_id': admin_user_id  # Ensure user_id is set correctly
                         }}
                     )
                     add_system_log(f"Updated user record for admin: {admin_email}", "INFO")
@@ -555,12 +564,15 @@ def admin_get_users():
                 
                 user['_id'] = str(user['_id'])
                 
-                # Fix field name differences for front-end compatibility
-                # Handle both auth0Id and auth0_id field names
-                if 'auth0Id' in user and 'user_id' not in user:
-                    user['user_id'] = user['auth0Id']
-                elif 'auth0_id' in user and 'user_id' not in user:
-                    user['user_id'] = user['auth0_id']
+                # Ensure user_id exists and takes priority
+                if 'user_id' not in user:
+                    if 'auth0Id' in user:
+                        user['user_id'] = user['auth0Id']
+                    elif 'auth0_id' in user:
+                        user['user_id'] = user['auth0_id']
+                    else:
+                        # If no identifier exists, use _id as fallback
+                        user['user_id'] = user['_id']
                 
                 # Map field names that might differ between frontend and database
                 # Map lastLogin to lastActive if needed
@@ -724,12 +736,14 @@ def admin_revoke_subscription(user_id):
     
     try:
         if users_collection:
-            # First try to find user by ID
-            user = users_collection.find_one({'$or': [
-                {'_id': ObjectId(user_id) if ObjectId.is_valid(user_id) else None},
-                {'user_id': user_id},
-                {'auth0Id': user_id}
-            ]})
+            # First try to find user by user_id field (primary identifier)
+            user = users_collection.find_one({'user_id': user_id})
+            
+            # If not found, try other identifiers as fallback
+            if not user and ObjectId.is_valid(user_id):
+                user = users_collection.find_one({'_id': ObjectId(user_id)})
+            if not user:
+                user = users_collection.find_one({'auth0Id': user_id})
             
             if not user:
                 return jsonify({'error': 'User not found'}), 404
@@ -740,7 +754,8 @@ def admin_revoke_subscription(user_id):
                 {'$set': {
                     'subscription': 'FREE',
                     'subscriptionUpdatedAt': datetime.datetime.utcnow(),
-                    'usageCount': 0  # Reset usage count
+                    'usageCount': 0,  # Reset usage count
+                    'user_id': user.get('auth0Id', user_id)  # Ensure user_id is set
                 }}
             )
             
@@ -1150,7 +1165,8 @@ def transform_text():
             try:
                 # Create the transformation record
                 transformation = {
-                    'userId': user_id,  # Store as string instead of ObjectId
+                    'userId': user_id,  # Use user_id as the primary identifier
+                    'user_id': user_id,  # Also store as user_id for consistency with other collections
                     'originalText': text,
                     'transformedText': transformed_text,
                     'tone': tone,
@@ -1197,9 +1213,12 @@ def get_user_transformations():
         return jsonify({'error': 'User ID required'}), 400
     
     try:
-        # Find transformations for this user
+        # Find transformations for this user by searching for both userId and user_id fields
         transformations = list(transformations_collection.find(
-            {'userId': user_id}  # Use string user_id directly
+            {'$or': [
+                {'userId': user_id},  # Backward compatibility with older records
+                {'user_id': user_id}   # New user_id field
+            ]}
         ).sort('createdAt', -1).limit(10))
         
         add_system_log(f"Retrieved {len(transformations)} transformations for user {user_id}", "INFO")
@@ -1617,9 +1636,17 @@ def migrate_existing_users():
         for user in users:
             updates = {}
             
-            # Ensure user_id field exists (equal to auth0Id)
+            # Ensure user_id field exists and is prioritized
+            # First check if user has an auth0Id but no user_id
             if 'auth0Id' in user and 'user_id' not in user:
                 updates['user_id'] = user['auth0Id']
+            # Also handle auth0_id field (with underscore)
+            elif 'auth0_id' in user and 'user_id' not in user:
+                updates['user_id'] = user['auth0_id']
+            # If neither field exists, create a placeholder user_id
+            elif 'user_id' not in user:
+                updates['user_id'] = str(user['_id'])  # Use MongoDB _id as a fallback
+                updates['auth0Id'] = str(user['_id'])  # Set auth0Id too for consistency
             
             # Ensure other required fields
             if 'lastActive' not in user and 'lastLogin' in user:
