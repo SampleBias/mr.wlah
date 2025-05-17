@@ -20,6 +20,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from urllib.parse import urlencode
 import uuid
+import random
 
 # Import database logging functions
 try:
@@ -831,11 +832,19 @@ def admin_add_user():
                 })
             else:
                 # Create new user
+                
+                # Generate a username if not provided
+                username = data.get('username')
+                if not username:
+                    email_base = data['email'].split('@')[0].replace('.', '').lower()
+                    username = f"{email_base}_{random.randint(1000, 9999)}"
+                
                 new_user = {
                     'user_id': data['user_id'],
                     'auth0Id': data['user_id'],  # Keep backward compatibility
                     'email': data['email'],
                     'name': data['name'],
+                    'username': username,        # Always include a username
                     'createdAt': timestamp_now,
                     'lastLogin': timestamp_now,
                     'lastActive': timestamp_now,
@@ -1291,19 +1300,41 @@ def callback():
             try:
                 # Get the user ID from Auth0
                 auth0_id = userinfo['sub']
+                
                 # First try to find user by user_id field (primary identifier)
                 user = users_collection.find_one({'user_id': auth0_id})
+                
                 # If not found, try auth0Id as fallback
                 if not user:
                     user = users_collection.find_one({'auth0Id': auth0_id})
+                
                 timestamp_now = datetime.datetime.now()
+                
                 # If not, create user record - use field names matching existing data in the db
                 if not user:
+                    # Generate a username based on email or name to avoid null username issues
+                    email = userinfo.get('email', '')
+                    name = userinfo.get('name', '')
+                    
+                    if email:
+                        # Try to use email as the basis for username
+                        username_base = email.split('@')[0].replace('.', '').lower()
+                    elif name:
+                        # If no email, use name
+                        username_base = name.replace(' ', '').lower()
+                    else:
+                        # Last resort, generate a random username
+                        username_base = f"user_{uuid.uuid4().hex[:8]}"
+                    
+                    # Add a random number to ensure uniqueness
+                    username = f"{username_base}_{random.randint(1000, 9999)}"
+                    
                     new_user = {
                         'user_id': auth0_id,             # Primary identifier
                         'auth0Id': auth0_id,             # For backward compatibility
                         'email': userinfo.get('email', ''),
                         'name': userinfo.get('name', ''),
+                        'username': username,            # Always set a username
                         'createdAt': timestamp_now,      # Match existing field format in db
                         'lastLogin': timestamp_now,      # Match existing field format in db
                         'lastActive': timestamp_now,     # For admin panel compatibility
@@ -1346,6 +1377,21 @@ def callback():
                             'defaultTone': 'casual',
                             'saveHistory': True
                         }
+                    
+                    # Check if username is missing and add one if needed
+                    if 'username' not in user or not user.get('username'):
+                        email = userinfo.get('email', '')
+                        name = userinfo.get('name', '')
+                        
+                        if email:
+                            username_base = email.split('@')[0].replace('.', '').lower()
+                        elif name:
+                            username_base = name.replace(' ', '').lower()
+                        
+                        # Add a random number to ensure uniqueness
+                        username = f"{username_base}_{random.randint(1000, 9999)}"
+                        updates['username'] = username
+                        add_system_log(f"Added missing username '{username}' to existing user")
                     
                     # Always update with the _id field for consistency
                     users_collection.update_one(
