@@ -499,7 +499,7 @@ def admin_login():
         add_system_log(f"User {admin_email} ({admin_user_id}) logged in as admin", "INFO")
         
         # If we have a MongoDB connection, flag this user as an admin in the database
-        if users_collection and admin_user_id:
+        if users_collection is not None and admin_user_id:
             try:
                 # First try to find user by user_id field (primary identifier)
                 user = users_collection.find_one({'user_id': admin_user_id})
@@ -549,7 +549,7 @@ def admin_get_users():
         return jsonify({'error': 'Unauthorized'}), 401
     
     try:
-        if users_collection:
+        if users_collection is not None:
             add_system_log("Fetching users from database for admin panel", "INFO")
             admin_profile = session.get('profile', {})
             admin_user_id = admin_profile.get('user_id', '')
@@ -685,7 +685,7 @@ def admin_grant_subscription(user_id):
         return jsonify({'error': 'Invalid subscription type'}), 400
     
     try:
-        if users_collection:
+        if users_collection is not None:
             # First try to find user by user_id field (primary identifier)
             user = users_collection.find_one({'user_id': user_id})
             
@@ -736,7 +736,7 @@ def admin_revoke_subscription(user_id):
         return jsonify({'error': 'Unauthorized'}), 401
     
     try:
-        if users_collection:
+        if users_collection is not None:
             # First try to find user by user_id field (primary identifier)
             user = users_collection.find_one({'user_id': user_id})
             
@@ -795,7 +795,7 @@ def admin_add_user():
         return jsonify({'error': f'Invalid subscription type: {subscription}'}), 400
     
     try:
-        if users_collection:
+        if users_collection is not None:
             # Check if user already exists
             existing_user = users_collection.find_one({'user_id': data['user_id']})
             
@@ -883,7 +883,7 @@ def get_user_subscription():
     user_id = profile.get('user_id')
     
     try:
-        if users_collection:
+        if users_collection is not None:
             # Get user from database - prioritize user_id field
             user = users_collection.find_one({'user_id': user_id})
             
@@ -968,7 +968,7 @@ def record_transformation():
         data = request.json or {}
         timestamp = data.get('timestamp', datetime.datetime.utcnow().isoformat())
         
-        if users_collection:
+        if users_collection is not None:
             # Prioritize looking for user by user_id
             user = users_collection.find_one({'user_id': user_id})
             
@@ -1015,7 +1015,7 @@ def record_transformation():
                 users_collection.insert_one(new_user)
             
             # Record transformation in history if enabled
-            if transformations_collection:
+            if transformations_collection is not None:
                 transformations_collection.insert_one({
                     'user_id': user_id,
                     'timestamp': timestamp,
@@ -1043,7 +1043,7 @@ def transform_text():
     user_id = profile.get('user_id')
     
     # Check if user has reached usage limit
-    if users_collection:
+    if users_collection is not None:
         # First look for user by user_id
         user = users_collection.find_one({'user_id': user_id})
         
@@ -1287,7 +1287,7 @@ def callback():
         add_system_log(f"[AUTH CALLBACK] Session ID: {id(session)}")
         
         # Handle user record in database if configured
-        if users_collection:
+        if users_collection is not None:
             try:
                 # Get the user ID from Auth0
                 auth0_id = userinfo['sub']
@@ -1650,7 +1650,7 @@ def migrate_existing_users():
     Migrate existing users to ensure they have the required fields.
     This function should run once at application startup.
     """
-    if not users_collection:
+    if users_collection is None:
         add_system_log("No database connection, skipping user migration", "WARNING")
         return False
     
