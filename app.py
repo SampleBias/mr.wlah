@@ -1279,16 +1279,12 @@ def callback():
             try:
                 # Get the user ID from Auth0
                 auth0_id = userinfo['sub']
-                
                 # First try to find user by user_id field (primary identifier)
                 user = users_collection.find_one({'user_id': auth0_id})
-                
                 # If not found, try auth0Id as fallback
                 if not user:
                     user = users_collection.find_one({'auth0Id': auth0_id})
-                
                 timestamp_now = datetime.datetime.now()
-                
                 # If not, create user record - use field names matching existing data in the db
                 if not user:
                     new_user = {
@@ -1307,9 +1303,12 @@ def callback():
                             'saveHistory': True
                         }
                     }
-                    
-                    result = users_collection.insert_one(new_user)
-                    add_system_log(f"New user created with ID: {result.inserted_id} - {userinfo.get('email', 'No email')}")
+                    try:
+                        result = users_collection.insert_one(new_user)
+                        add_system_log(f"New user created with ID: {result.inserted_id} - {userinfo.get('email', 'No email')}")
+                    except Exception as insert_exc:
+                        add_system_log(f"CRITICAL: Failed to insert new user: {str(insert_exc)}", "ERROR")
+                        return redirect('/login?error=user_creation_failed')
                 else:
                     # Update existing user - determine which field names to use based on existing data
                     updates = {
