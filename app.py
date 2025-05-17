@@ -531,84 +531,83 @@ def admin_status():
 
 @app.route('/api/admin/users')
 def admin_get_users():
-    """Get all users for admin panel"""
+    """Get all users for admin panel, with optional filters for recent activity and by Auth0 ID/user_id"""
     # Check if admin
     if not session.get('is_admin', False):
         return jsonify({'error': 'Unauthorized'}), 401
     
     try:
         if users_collection:
-            # Log for debugging
             add_system_log("Fetching users from database for admin panel", "INFO")
-            
-            # Get current admin user profile
             admin_profile = session.get('profile', {})
             admin_user_id = admin_profile.get('user_id', '')
+
+            # --- NEW: Support query params ---
+            recent = request.args.get('recent', 'false').lower() == 'true'
+            auth0_id = request.args.get('auth0_id')
+            user_id_param = request.args.get('user_id')
+            query = {}
+            now = datetime.datetime.utcnow()
             
-            # Fetch all users from the database (adding sort to show recent users first)
-            # Use lastLogin field for sorting if it exists, otherwise fall back to lastActive
-            users = list(users_collection.find().sort([
+            if recent:
+                # Only users active in the last 24 hours
+                since = now - datetime.timedelta(hours=24)
+                query['lastActive'] = {'$gte': since}
+            if auth0_id:
+                query['$or'] = [
+                    {'auth0Id': auth0_id},
+                    {'user_id': auth0_id}
+                ]
+            if user_id_param:
+                query['$or'] = [
+                    {'user_id': user_id_param},
+                    {'auth0Id': user_id_param}
+                ]
+            
+            # If both recent and id filter, combine
+            # (MongoDB $and for both filters)
+            if (recent and (auth0_id or user_id_param)):
+                or_filter = query.pop('$or')
+                query = {'$and': [query, {'$or': or_filter}]}
+            
+            users = list(users_collection.find(query).sort([
                 ('lastLogin', -1), 
                 ('lastActive', -1),
                 ('createdAt', -1)
             ]))
-            
-            # Log the raw count of users found
-            add_system_log(f"Found {len(users)} users in database", "INFO")
-            
-            # Convert ObjectId to string for JSON serialization
+            add_system_log(f"Found {len(users)} users in database (query: {query})", "INFO")
             for user in users:
-                # Log sample user data for first user only
                 if users.index(user) == 0:
                     add_system_log(f"Sample user data: {user}", "INFO")
-                
                 user['_id'] = str(user['_id'])
-                
-                # Ensure user_id exists and takes priority
                 if 'user_id' not in user:
                     if 'auth0Id' in user:
                         user['user_id'] = user['auth0Id']
                     elif 'auth0_id' in user:
                         user['user_id'] = user['auth0_id']
                     else:
-                        # If no identifier exists, use _id as fallback
                         user['user_id'] = user['_id']
-                
-                # Map field names that might differ between frontend and database
-                # Map lastLogin to lastActive if needed
                 if 'lastLogin' in user and 'lastActive' not in user:
                     user['lastActive'] = user['lastLogin']
                 elif 'last_login' in user and 'lastActive' not in user:
                     user['lastActive'] = user['last_login']
                 elif 'lastActive' not in user:
                     user['lastActive'] = user.get('createdAt', None) or user.get('created_at', None)
-                
-                # Ensure other required fields have default values
                 if 'subscription' not in user:
                     user['subscription'] = 'FREE'
                 if 'usageCount' not in user:
                     user['usageCount'] = 0
-                
-                # Make sure name and email fields exist
                 if 'name' not in user and 'email' in user:
-                    # Use email as name if no name provided
                     user['name'] = user['email'].split('@')[0]
                 elif 'name' not in user:
                     user['name'] = 'Unknown User'
                 if 'email' not in user:
                     user['email'] = 'No email'
-                
-                # Flag the current admin user
                 if admin_user_id and user.get('user_id') == admin_user_id:
                     user['isCurrentAdmin'] = True
-            
             add_system_log(f"Admin fetched user list ({len(users)} users)", "INFO")
-            
-            # If no users found, include sample data for testing
             if not users:
                 add_system_log("No users found in database, returning sample data", "WARNING")
-                
-                # Add current admin as sample if we have their profile
                 if admin_profile and admin_profile.get('user_id'):
                     users.append({
                         '_id': 'sample-admin',
@@ -630,18 +629,11 @@ def admin_get_users():
                         'lastActive': datetime.datetime.now().isoformat(),
                         'user_id': 'sample-user-id'
                     })
-                
             return jsonify(users)
         else:
-            # Return sample data if no DB connection
             add_system_log("No database connection, returning sample data", "WARNING")
-            
-            # Get current admin user profile for sample data
             admin_profile = session.get('profile', {})
-            
             sample_data = []
-            
-            # Add the admin user first if we have their profile
             if admin_profile and admin_profile.get('user_id'):
                 sample_data.append({
                     '_id': 'admin-id',
@@ -653,8 +645,6 @@ def admin_get_users():
                     'user_id': admin_profile.get('user_id'),
                     'isCurrentAdmin': True
                 })
-            
-            # Add additional sample user
             sample_data.append({
                 '_id': 'sample-1',
                 'name': 'Sample User',
@@ -664,7 +654,6 @@ def admin_get_users():
                 'lastActive': datetime.datetime.now().isoformat(),
                 'user_id': 'sample-user-id'
             })
-            
             return jsonify(sample_data)
     except Exception as e:
         add_system_log(f"Error fetching users: {str(e)}", "ERROR")
