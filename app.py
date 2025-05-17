@@ -469,7 +469,7 @@ SUBSCRIPTION_LIMITS = {
 }
 
 # Admin PIN for admin panel access (should be stored in env var in production)
-ADMIN_PIN = os.getenv('ADMIN_PIN', '123456')  # Default for development only
+ADMIN_PIN = os.getenv('ADMIN_PIN', '')  # Default for development only
 
 @app.route('/admin')
 def admin_panel():
