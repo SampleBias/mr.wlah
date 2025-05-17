@@ -74,7 +74,19 @@ api_usage_collection = None
 
 # Check if X.509 certificate exists
 cert_path = os.path.join('certs', 'X509-cert-5870665680541743449.pem')
-has_certificate = os.path.exists(cert_path)
+cert_content = os.getenv('MONGODB_CERT')
+
+if cert_content:
+    # We're on Heroku with cert in env var
+    import tempfile
+    cert_file = tempfile.NamedTemporaryFile(delete=False)
+    cert_file.write(cert_content.encode())
+    cert_file.close()
+    cert_path = cert_file.name
+    has_certificate = True
+else:
+    # Local environment, check for file
+    has_certificate = os.path.exists(cert_path)
 
 # Connect to MongoDB if certificate exists
 if has_certificate:
