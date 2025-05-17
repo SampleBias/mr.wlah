@@ -84,6 +84,24 @@
         #refresh-users {
             margin-left: 10px;
         }
+        
+        .current-admin {
+            background-color: rgba(0, 240, 255, 0.1);
+            border-left: 3px solid var(--primary-color);
+        }
+        
+        .no-data-message {
+            text-align: center;
+            padding: 20px;
+            color: var(--secondary-color);
+            font-size: 1.2rem;
+            grid-column: 1 / -1;
+        }
+        
+        #debug-info {
+            max-height: 400px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -345,7 +363,13 @@
             const searchTerm = userSearch.value.toLowerCase();
             const planFilterValue = planFilter.value;
 
-            console.log("Rendering users:", users); // Debug log to see user data
+            // Show debugging information
+            const debugInfo = document.getElementById('debug-info');
+            debugInfo.textContent = `Total users found: ${users ? users.length : 0}\n`;
+            if (users && users.length > 0) {
+                const firstUser = users[0];
+                debugInfo.textContent += `First user: ${JSON.stringify(firstUser, null, 2)}\n`;
+            }
             
             // Check if we have any users
             if (!users || users.length === 0) {
@@ -380,25 +404,45 @@
                 return;
             }
             
+            // Flag to check if we found the current admin
+            let foundCurrentAdmin = false;
+            
             // Add user rows
             filteredUsers.forEach(user => {
                 const row = document.createElement('tr');
                 
+                // Check if this is the current admin
+                const isCurrentAdmin = user.isCurrentAdmin === true;
+                if (isCurrentAdmin) {
+                    row.classList.add('current-admin');
+                    foundCurrentAdmin = true;
+                }
+                
                 // Format the last active date
-                const lastActive = user.lastActive ? new Date(user.lastActive).toLocaleDateString() : 'Never';
+                let lastActive = 'Never';
+                if (user.lastActive) {
+                    try {
+                        lastActive = new Date(user.lastActive).toLocaleString();
+                    } catch (e) {
+                        console.error('Error formatting date:', e);
+                        lastActive = user.lastActive;
+                    }
+                }
                 
                 // Determine usage display
-                const usageDisplay = user.subscription?.toUpperCase() === 'UNLIMITED' 
+                const userSubscription = user.subscription?.toUpperCase() || 'FREE';
+                const usageDisplay = userSubscription === 'UNLIMITED' 
                     ? `${user.usageCount || 0} / ∞` 
-                    : `${user.usageCount || 0} / ${getUserLimit(user.subscription)}`;
+                    : `${user.usageCount || 0} / ${getUserLimit(userSubscription)}`;
                 
                 // Set userId (support both user_id and _id)
-                const userId = user._id || '';
+                const userId = user.user_id || user._id || '';
                 
+                // Create the row
                 row.innerHTML = `
-                    <td>${user.name || 'Unknown'}</td>
+                    <td>${user.name || 'Unknown'}${isCurrentAdmin ? ' (You)' : ''}</td>
                     <td>${user.email || 'No email'}</td>
-                    <td>${user.subscription || 'FREE'}</td>
+                    <td>${userSubscription}</td>
                     <td>${usageDisplay}</td>
                     <td>${lastActive}</td>
                     <td class="admin-actions">
@@ -414,6 +458,26 @@
             
             // Add action button listeners
             addActionButtonListeners();
+            
+            // Update debug info with additional information about current admin status
+            debugInfo.textContent += `Current admin found in user list: ${foundCurrentAdmin}\n`;
+            
+            // Fetch current admin profile
+            fetch('/api/auth/status')
+                .then(resp => resp.json())
+                .then(data => {
+                    if (data.isAuthenticated && data.user) {
+                        debugInfo.textContent += `Current admin profile: ${JSON.stringify(data.user, null, 2)}\n`;
+                        
+                        // Update the admin info display
+                        document.getElementById('current-admin-info').textContent = 
+                            `Logged in as: ${data.user.name} (${data.user.email})`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching user profile:', error);
+                    debugInfo.textContent += `Error fetching current admin profile: ${error.message}\n`;
+                });
         }
         
         // Get user limit based on subscription

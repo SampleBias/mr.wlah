@@ -463,6 +463,7 @@ def admin_login():
     pin = data.get('pin')
     
     if not pin or pin != ADMIN_PIN:
+        add_system_log("Failed admin login attempt with incorrect PIN", "WARNING")
         return jsonify({'success': False, 'message': 'Invalid PIN'}), 401
     
     # Set admin session
@@ -470,15 +471,48 @@ def admin_login():
     
     # Store the admin's user profile if available
     admin_profile = session.get('profile', {})
+    admin_user_id = None
+    
     if admin_profile:
         # If an authenticated user is becoming an admin, log it
         admin_email = admin_profile.get('email', 'Unknown')
-        admin_id = admin_profile.get('user_id', 'Unknown')
-        add_system_log(f"User {admin_email} ({admin_id}) logged in as admin", "INFO")
+        admin_user_id = admin_profile.get('user_id', 'Unknown')
+        add_system_log(f"User {admin_email} ({admin_user_id}) logged in as admin", "INFO")
+        
+        # If we have a MongoDB connection, flag this user as an admin in the database
+        if users_collection and admin_user_id:
+            try:
+                # Try to find the user by auth0Id or user_id
+                user = users_collection.find_one({'$or': [
+                    {'auth0Id': admin_user_id},
+                    {'user_id': admin_user_id}
+                ]})
+                
+                if user:
+                    # Update the user record to mark as admin
+                    users_collection.update_one(
+                        {'_id': user['_id']},
+                        {'$set': {
+                            'is_admin': True,
+                            'lastAdminLogin': datetime.datetime.utcnow()
+                        }}
+                    )
+                    add_system_log(f"Updated user record for admin: {admin_email}", "INFO")
+                else:
+                    add_system_log(f"Admin user not found in database: {admin_email}", "WARNING")
+            except Exception as e:
+                add_system_log(f"Error updating admin user record: {str(e)}", "ERROR")
     else:
         add_system_log(f"Admin logged in successfully (no user profile)", "INFO")
     
-    return jsonify({'success': True})
+    return jsonify({
+        'success': True, 
+        'profile': {
+            'email': admin_profile.get('email', ''),
+            'name': admin_profile.get('name', ''),
+            'user_id': admin_user_id
+        } if admin_profile else {}
+    })
 
 @app.route('/api/admin/status')
 def admin_status():
@@ -498,12 +532,24 @@ def admin_get_users():
             # Log for debugging
             add_system_log("Fetching users from database for admin panel", "INFO")
             
+            # Get current admin user profile
+            admin_profile = session.get('profile', {})
+            admin_user_id = admin_profile.get('user_id', '')
+            
             # Fetch all users from the database (adding sort to show recent users first)
-            users = list(users_collection.find().sort('lastLogin', -1))
+            # Use lastLogin field for sorting if it exists, otherwise fall back to lastActive
+            users = list(users_collection.find().sort([
+                ('lastLogin', -1), 
+                ('lastActive', -1),
+                ('createdAt', -1)
+            ]))
+            
+            # Log the raw count of users found
+            add_system_log(f"Found {len(users)} users in database", "INFO")
             
             # Convert ObjectId to string for JSON serialization
             for user in users:
-                # Log sample user data
+                # Log sample user data for first user only
                 if users.index(user) == 0:
                     add_system_log(f"Sample user data: {user}", "INFO")
                 
@@ -539,37 +585,75 @@ def admin_get_users():
                     user['name'] = 'Unknown User'
                 if 'email' not in user:
                     user['email'] = 'No email'
+                
+                # Flag the current admin user
+                if admin_user_id and user.get('user_id') == admin_user_id:
+                    user['isCurrentAdmin'] = True
             
             add_system_log(f"Admin fetched user list ({len(users)} users)", "INFO")
             
             # If no users found, include sample data for testing
             if not users:
                 add_system_log("No users found in database, returning sample data", "WARNING")
-                users.append({
-                    '_id': 'sample-1',
-                    'name': 'Sample User',
-                    'email': 'user@example.com',
-                    'subscription': 'FREE',
-                    'usageCount': 1,
-                    'lastActive': datetime.datetime.now().isoformat(),
-                    'user_id': 'sample-user-id'
-                })
+                
+                # Add current admin as sample if we have their profile
+                if admin_profile and admin_profile.get('user_id'):
+                    users.append({
+                        '_id': 'sample-admin',
+                        'name': admin_profile.get('name', 'Admin User'),
+                        'email': admin_profile.get('email', 'admin@example.com'),
+                        'subscription': 'UNLIMITED',
+                        'usageCount': 0,
+                        'lastActive': datetime.datetime.now().isoformat(),
+                        'user_id': admin_profile.get('user_id'),
+                        'isCurrentAdmin': True
+                    })
+                else:
+                    users.append({
+                        '_id': 'sample-1',
+                        'name': 'Sample User',
+                        'email': 'user@example.com',
+                        'subscription': 'FREE',
+                        'usageCount': 1,
+                        'lastActive': datetime.datetime.now().isoformat(),
+                        'user_id': 'sample-user-id'
+                    })
                 
             return jsonify(users)
         else:
             # Return sample data if no DB connection
             add_system_log("No database connection, returning sample data", "WARNING")
-            return jsonify([
-                {
-                    '_id': '1',
-                    'name': 'Sample User',
-                    'email': 'user@example.com',
-                    'subscription': 'FREE',
-                    'usageCount': 1,
-                    'lastActive': '2023-05-13T18:57:22.681Z',
-                    'user_id': 'sample-user-id'
-                }
-            ])
+            
+            # Get current admin user profile for sample data
+            admin_profile = session.get('profile', {})
+            
+            sample_data = []
+            
+            # Add the admin user first if we have their profile
+            if admin_profile and admin_profile.get('user_id'):
+                sample_data.append({
+                    '_id': 'admin-id',
+                    'name': admin_profile.get('name', 'Admin User'),
+                    'email': admin_profile.get('email', 'admin@example.com'),
+                    'subscription': 'UNLIMITED',
+                    'usageCount': 0,
+                    'lastActive': datetime.datetime.now().isoformat(),
+                    'user_id': admin_profile.get('user_id'),
+                    'isCurrentAdmin': True
+                })
+            
+            # Add additional sample user
+            sample_data.append({
+                '_id': 'sample-1',
+                'name': 'Sample User',
+                'email': 'user@example.com',
+                'subscription': 'FREE',
+                'usageCount': 1,
+                'lastActive': datetime.datetime.now().isoformat(),
+                'user_id': 'sample-user-id'
+            })
+            
+            return jsonify(sample_data)
     except Exception as e:
         add_system_log(f"Error fetching users: {str(e)}", "ERROR")
         return jsonify({'error': str(e)}), 500
@@ -655,8 +739,11 @@ def get_user_subscription():
     
     try:
         if users_collection:
-            # Get user from database
-            user = users_collection.find_one({'user_id': user_id})
+            # Get user from database - look for both user_id and auth0Id fields
+            user = users_collection.find_one({'$or': [
+                {'user_id': user_id},
+                {'auth0Id': user_id}
+            ]})
             
             if user:
                 # Return subscription info
@@ -664,17 +751,46 @@ def get_user_subscription():
                     'subscription': user.get('subscription', 'FREE'),
                     'usageCount': user.get('usageCount', 0),
                     'usageLimit': SUBSCRIPTION_LIMITS.get(user.get('subscription', 'FREE'), SUBSCRIPTION_LIMITS['FREE']),
-                    'lastResetDate': user.get('lastResetDate')
+                    'lastResetDate': user.get('lastResetDate'),
+                    'user_id': user_id
                 }
+                
+                # Add extra data for debugging
+                add_system_log(f"Retrieved subscription info for user {user_id}: {subscription_data['subscription']}, {subscription_data['usageCount']}/{subscription_data['usageLimit']}", "INFO")
                 
                 return jsonify(subscription_data)
             else:
-                # User not found, return default FREE
+                # User not found, create a new record
+                add_system_log(f"User {user_id} not found in database, creating new record", "INFO")
+                
+                # Create new user with default FREE subscription
+                timestamp_now = datetime.datetime.now()
+                new_user = {
+                    'user_id': user_id,
+                    'auth0Id': user_id,  # Store both for backward compatibility
+                    'email': profile.get('email', ''),
+                    'name': profile.get('name', ''),
+                    'createdAt': timestamp_now,
+                    'lastLogin': timestamp_now,
+                    'lastActive': timestamp_now,
+                    'subscription': 'FREE',
+                    'usageCount': 0,
+                    'subscriptionUpdatedAt': timestamp_now,
+                    'preferences': {
+                        'defaultTone': 'casual',
+                        'saveHistory': True
+                    }
+                }
+                
+                users_collection.insert_one(new_user)
+                
+                # Return default subscription info
                 return jsonify({
                     'subscription': 'FREE',
                     'usageCount': 0,
                     'usageLimit': SUBSCRIPTION_LIMITS['FREE'],
-                    'lastResetDate': None
+                    'lastResetDate': None,
+                    'user_id': user_id
                 })
         else:
             # Mock response for no DB
@@ -682,7 +798,8 @@ def get_user_subscription():
                 'subscription': 'FREE',
                 'usageCount': 0,
                 'usageLimit': SUBSCRIPTION_LIMITS['FREE'],
-                'lastResetDate': None
+                'lastResetDate': None,
+                'user_id': user_id
             })
     except Exception as e:
         add_system_log(f"Error getting subscription info: {str(e)}", "ERROR")
@@ -705,15 +822,49 @@ def record_transformation():
         timestamp = data.get('timestamp', datetime.datetime.utcnow().isoformat())
         
         if users_collection:
-            # Update user transformation count and last active date
-            users_collection.update_one(
+            # Look for the user with both user_id and auth0Id fields
+            user = users_collection.find_one({'$or': [
                 {'user_id': user_id},
-                {
-                    '$inc': {'usageCount': 1},
-                    '$set': {'lastActive': timestamp}
-                },
-                upsert=True
-            )
+                {'auth0Id': user_id}
+            ]})
+            
+            if user:
+                # Update existing user
+                users_collection.update_one(
+                    {'_id': user['_id']},
+                    {
+                        '$inc': {'usageCount': 1},
+                        '$set': {
+                            'lastActive': timestamp,
+                            # Ensure user_id is always set
+                            'user_id': user_id
+                        }
+                    }
+                )
+            else:
+                # If user not found, create a new record
+                add_system_log(f"User {user_id} not found in database for recording transformation, creating new record", "INFO")
+                
+                # Create new user with default FREE subscription
+                timestamp_now = datetime.datetime.now()
+                new_user = {
+                    'user_id': user_id,
+                    'auth0Id': user_id,  # Store both for backward compatibility
+                    'email': profile.get('email', ''),
+                    'name': profile.get('name', ''),
+                    'createdAt': timestamp_now,
+                    'lastLogin': timestamp_now,
+                    'lastActive': timestamp_now,
+                    'subscription': 'FREE',
+                    'usageCount': 1,  # Start with the current transformation
+                    'subscriptionUpdatedAt': timestamp_now,
+                    'preferences': {
+                        'defaultTone': 'casual',
+                        'saveHistory': True
+                    }
+                }
+                
+                users_collection.insert_one(new_user)
             
             # Record transformation in history if enabled
             if transformations_collection:
@@ -982,10 +1133,11 @@ def callback():
         if users_collection:
             try:
                 # Check if user exists - try both field formats (auth0Id and auth0_id)
+                auth0_id = userinfo['sub']
                 user = users_collection.find_one({'$or': [
-                    {'auth0Id': userinfo['sub']},
-                    {'auth0_id': userinfo['sub']},
-                    {'user_id': userinfo['sub']}
+                    {'auth0Id': auth0_id},
+                    {'auth0_id': auth0_id},
+                    {'user_id': auth0_id}
                 ]})
                 
                 timestamp_now = datetime.datetime.now()
@@ -993,17 +1145,17 @@ def callback():
                 # If not, create user record - use field names matching existing data in the db
                 if not user:
                     new_user = {
-                        'auth0Id': userinfo['sub'],          # Use auth0Id to match existing db format
-                        'user_id': userinfo['sub'],          # Also add user_id for admin panel
+                        'auth0Id': auth0_id,             # Use auth0Id to match existing db format
+                        'user_id': auth0_id,             # Also add user_id for admin panel
                         'email': userinfo.get('email', ''),
                         'name': userinfo.get('name', ''),
-                        'createdAt': timestamp_now,          # Match existing field format in db
-                        'lastLogin': timestamp_now,          # Match existing field format in db
-                        'lastActive': timestamp_now,         # For admin panel compatibility
-                        'subscription': 'FREE',              # Default subscription
-                        'usageCount': 0,                     # Initialize usage counter
+                        'createdAt': timestamp_now,      # Match existing field format in db
+                        'lastLogin': timestamp_now,      # Match existing field format in db
+                        'lastActive': timestamp_now,     # For admin panel compatibility
+                        'subscription': 'FREE',          # Default subscription
+                        'usageCount': 0,                 # Initialize usage counter
                         'subscriptionUpdatedAt': timestamp_now,
-                        'preferences': {                     # Add user preferences
+                        'preferences': {                 # Add user preferences
                             'defaultTone': 'casual',
                             'saveHistory': True
                         }
@@ -1015,7 +1167,9 @@ def callback():
                     # Update existing user - determine which field names to use based on existing data
                     updates = {
                         'lastLogin': timestamp_now,   # Use matching db format
-                        'lastActive': timestamp_now   # Add for admin panel compatibility
+                        'lastActive': timestamp_now,  # Add for admin panel compatibility
+                        # Always ensure user_id exists and is equal to auth0Id
+                        'user_id': auth0_id
                     }
                     
                     # Update name and email if provided
@@ -1023,10 +1177,6 @@ def callback():
                         updates['name'] = userinfo.get('name')
                     if userinfo.get('email'):
                         updates['email'] = userinfo.get('email')
-                    
-                    # Add user_id field if it doesn't exist
-                    if 'user_id' not in user:
-                        updates['user_id'] = userinfo['sub']
                         
                     # Add missing fields if they don't exist
                     if 'subscription' not in user:
@@ -1039,17 +1189,9 @@ def callback():
                             'saveHistory': True
                         }
                     
-                    # Determine which field to use for the query based on what exists in the user doc
-                    update_query = {}
-                    if 'auth0Id' in user:
-                        update_query = {'auth0Id': userinfo['sub']}
-                    elif 'auth0_id' in user:
-                        update_query = {'auth0_id': userinfo['sub']}
-                    else:
-                        update_query = {'user_id': userinfo['sub']}
-                        
+                    # Always update with the _id field for consistency
                     users_collection.update_one(
-                        update_query,
+                        {'_id': user['_id']},
                         {'$set': updates}
                     )
                     
@@ -1312,6 +1454,68 @@ def client_config():
         }
     })
 
+# Add this function before the main block
+def migrate_existing_users():
+    """
+    Migrate existing users to ensure they have the required fields.
+    This function should run once at application startup.
+    """
+    if not users_collection:
+        add_system_log("No database connection, skipping user migration", "WARNING")
+        return False
+    
+    try:
+        # Find all users
+        users = list(users_collection.find())
+        
+        if not users:
+            add_system_log("No users to migrate", "INFO")
+            return True
+        
+        add_system_log(f"Found {len(users)} users to check for migration", "INFO")
+        
+        migrated_count = 0
+        for user in users:
+            updates = {}
+            
+            # Ensure user_id field exists (equal to auth0Id)
+            if 'auth0Id' in user and 'user_id' not in user:
+                updates['user_id'] = user['auth0Id']
+            
+            # Ensure other required fields
+            if 'lastActive' not in user and 'lastLogin' in user:
+                updates['lastActive'] = user['lastLogin']
+            
+            if 'subscription' not in user:
+                updates['subscription'] = 'FREE'
+            
+            if 'usageCount' not in user:
+                updates['usageCount'] = 0
+            
+            if 'preferences' not in user:
+                updates['preferences'] = {
+                    'defaultTone': 'casual',
+                    'saveHistory': True
+                }
+            
+            # If we need to update the user
+            if updates:
+                users_collection.update_one(
+                    {'_id': user['_id']},
+                    {'$set': updates}
+                )
+                migrated_count += 1
+        
+        if migrated_count > 0:
+            add_system_log(f"Migrated {migrated_count} users to new format", "INFO")
+        else:
+            add_system_log("All users are already in the correct format", "INFO")
+        
+        return True
+    except Exception as e:
+        add_system_log(f"Error migrating users: {str(e)}", "ERROR")
+        return False
+
 if __name__ == '__main__':
     try:
         app.jinja_env.auto_reload = True
@@ -1337,6 +1541,9 @@ if __name__ == '__main__':
                 except Exception as e:
                     db_status += f" (error counting transformations: {str(e)})"
             add_system_log(db_status, "INFO")
+            
+            # Migrate existing users to new format
+            migrate_existing_users()
         else:
             add_system_log("Running without database connection", "WARNING")
         
