@@ -1185,12 +1185,18 @@ def transform_text():
                      IMPORTANT: Do not include any introductory phrases like "Here's your transformed text:" 
                      or concluding phrases like "I hope this helps!". Just provide the transformed content directly.
                      
+                     IMPORTANT: Do NOT start the text with conversational openings like "Okay", "So", "Well", 
+                     "Alright", or similar words. Begin with substantive content directly.
+                     
                      Text to transform: {text}"""
         else:
             prompt = f"""{tone_instruction}
                      
                      IMPORTANT: Do not include any introductory phrases like "Here's your transformed text:" 
                      or concluding phrases like "I hope this helps!". Just provide the transformed content directly.
+                     
+                     IMPORTANT: Do NOT start the text with conversational openings like "Okay", "So", "Well", 
+                     "Alright", or similar words. Begin with substantive content directly.
                      
                      Text to transform: {text}"""
         
