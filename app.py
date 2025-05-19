@@ -1149,12 +1149,35 @@ def transform_text():
         # Calculate original word count if target requested
         original_word_count = len(text.split()) if target_word_count else None
         
+        # Create more specific prompts based on the selected tone
+        tone_instructions = {
+            'casual': """Rewrite in a casual, conversational tone. Add personal experiences, 
+                     use everyday language, include colloquialisms, and make it engaging and relatable.
+                     The text should sound like it's coming from a friend having a relaxed conversation.""",
+            
+            'professional': """Rewrite in a professional, business-appropriate tone. Use clear, concise language,
+                     maintain a respectful and authoritative voice, and ensure proper grammar and punctuation.
+                     The text should be polished and suitable for a business or corporate setting.""",
+            
+            'academic': """Rewrite in an academic, scholarly tone. Use formal language, incorporate field-specific 
+                     terminology where appropriate, employ complex sentence structures, and maintain an objective,
+                     analytical perspective. Avoid first-person references and colloquialisms.""",
+            
+            'scientific': """Rewrite in a scientific, research-oriented tone. Use precise technical language,
+                     maintain objectivity, focus on data and evidence, and employ formal scientific writing conventions.
+                     Avoid personal anecdotes and emotional language. Be concise and factual.""",
+            
+            'creative': """Rewrite in a creative, engaging tone. Use vivid descriptions, varied sentence structure,
+                     incorporate metaphors or analogies where appropriate, and create a compelling narrative flow.
+                     The text should be expressive while maintaining clarity."""
+        }
+        
+        # Get tone-specific instructions, defaulting to casual if tone not recognized
+        tone_instruction = tone_instructions.get(tone.lower(), tone_instructions['casual'])
+        
         # Create prompt for Gemini, including word count constraint if specified
         if target_word_count:
-            prompt = f"""Rewrite the following text to sound more human. 
-                     Add personal experiences, vary sentence structure, 
-                     use colloquialisms, and make it engaging.
-                     Use a {tone} tone.
+            prompt = f"""{tone_instruction}
                      
                      IMPORTANT: The output must be approximately {target_word_count} words (±100 words).
                      Current word count is approximately {original_word_count} words.
@@ -1164,10 +1187,7 @@ def transform_text():
                      
                      Text to transform: {text}"""
         else:
-            prompt = f"""Rewrite the following text to sound more human. 
-                     Add personal experiences, vary sentence structure, 
-                     use colloquialisms, and make it engaging.
-                     Use a {tone} tone.
+            prompt = f"""{tone_instruction}
                      
                      IMPORTANT: Do not include any introductory phrases like "Here's your transformed text:" 
                      or concluding phrases like "I hope this helps!". Just provide the transformed content directly.
