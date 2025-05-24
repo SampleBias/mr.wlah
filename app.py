@@ -1154,7 +1154,14 @@ def transform_text():
             "avant-garde", "captivating", "crucial", "bustling", "distinguished", "esteemed", "exquisite", "formidable", "game-changing", "groundbreaking", "holistic", "iconic", "indomitable", "irrefutable", "meticulous", "multifaceted", "omniscient", "paradigm-shifting", "paramount", "pioneering", "pivotal", "predominant", "profound", "prominent", "quintessential", "revolutionary", "seamless", "tangible", "trailblazing", "ubiquitous", "unassailable", "unblemished", "unequaled", "unmatched", "unparalleled", "unrivaled", "unsurpassed", "unwavering", "unyielding", "visionary"
         ]
         forbidden_adjectives_str = ', '.join(forbidden_adjectives)
-        forbidden_instruction = f"IMPORTANT: Do NOT use any of the following adjectives in your writing: {forbidden_adjectives_str}."
+        
+        # List of nouns to avoid for AI detection
+        forbidden_nouns = [
+            "apogee", "epitome", "facet", "gusto", "journey", "landscape", "nexus", "odyssey", "panorama", "paradigm", "pinnacle", "spectrum", "symphony", "tapestry", "testament", "trajectory"
+        ]
+        forbidden_nouns_str = ', '.join(forbidden_nouns)
+        
+        forbidden_instruction = f"IMPORTANT: Do NOT use any of the following adjectives in your writing: {forbidden_adjectives_str}. IMPORTANT: Do NOT use any of the following nouns in your writing: {forbidden_nouns_str}."
 
         # Create more specific prompts based on the selected tone
         tone_instructions = {
