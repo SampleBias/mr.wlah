@@ -1149,6 +1149,13 @@ def transform_text():
         # Calculate original word count if target requested
         original_word_count = len(text.split()) if target_word_count else None
         
+        # List of adjectives to avoid for AI detection
+        forbidden_adjectives = [
+            "avant-garde", "captivating", "crucial", "bustling", "distinguished", "esteemed", "exquisite", "formidable", "game-changing", "groundbreaking", "holistic", "iconic", "indomitable", "irrefutable", "meticulous", "multifaceted", "omniscient", "paradigm-shifting", "paramount", "pioneering", "pivotal", "predominant", "profound", "prominent", "quintessential", "revolutionary", "seamless", "tangible", "trailblazing", "ubiquitous", "unassailable", "unblemished", "unequaled", "unmatched", "unparalleled", "unrivaled", "unsurpassed", "unwavering", "unyielding", "visionary"
+        ]
+        forbidden_adjectives_str = ', '.join(forbidden_adjectives)
+        forbidden_instruction = f"IMPORTANT: Do NOT use any of the following adjectives in your writing: {forbidden_adjectives_str}."
+
         # Create more specific prompts based on the selected tone
         tone_instructions = {
             'casual': """Rewrite in a casual, conversational tone. Add personal experiences, 
@@ -1179,24 +1186,28 @@ def transform_text():
         if target_word_count:
             prompt = f"""{tone_instruction}
                      
+                     {forbidden_instruction}
+                     
                      IMPORTANT: The output must be approximately {target_word_count} words (±100 words).
                      Current word count is approximately {original_word_count} words.
                      
-                     IMPORTANT: Do not include any introductory phrases like "Here's your transformed text:" 
-                     or concluding phrases like "I hope this helps!". Just provide the transformed content directly.
+                     IMPORTANT: Do not include any introductory phrases like \"Here's your transformed text:\" 
+                     or concluding phrases like \"I hope this helps!\". Just provide the transformed content directly.
                      
-                     IMPORTANT: Do NOT start the text with conversational openings like "Okay", "So", "Well", 
-                     "Alright", or similar words. Begin with substantive content directly.
+                     IMPORTANT: Do NOT start the text with conversational openings like \"Okay\", \"So\", \"Well\", 
+                     \"Alright\", or similar words. Begin with substantive content directly.
                      
                      Text to transform: {text}"""
         else:
             prompt = f"""{tone_instruction}
                      
-                     IMPORTANT: Do not include any introductory phrases like "Here's your transformed text:" 
-                     or concluding phrases like "I hope this helps!". Just provide the transformed content directly.
+                     {forbidden_instruction}
                      
-                     IMPORTANT: Do NOT start the text with conversational openings like "Okay", "So", "Well", 
-                     "Alright", or similar words. Begin with substantive content directly.
+                     IMPORTANT: Do not include any introductory phrases like \"Here's your transformed text:\" 
+                     or concluding phrases like \"I hope this helps!\". Just provide the transformed content directly.
+                     
+                     IMPORTANT: Do NOT start the text with conversational openings like \"Okay\", \"So\", \"Well\", 
+                     \"Alright\", or similar words. Begin with substantive content directly.
                      
                      Text to transform: {text}"""
         
