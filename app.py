@@ -1161,7 +1161,13 @@ def transform_text():
         ]
         forbidden_nouns_str = ', '.join(forbidden_nouns)
         
-        forbidden_instruction = f"IMPORTANT: Do NOT use any of the following adjectives in your writing: {forbidden_adjectives_str}. IMPORTANT: Do NOT use any of the following nouns in your writing: {forbidden_nouns_str}."
+        # List of verbs to avoid for AI detection
+        forbidden_verbs = [
+            "brace", "delve", "discover", "dive", "elevate", "embark", "embrace", "emerge", "ensure", "envision", "foster", "galvanize", "harness", "orchestrate", "redefine", "reinforce", "streamline", "transcend", "unleash", "unlock", "usher"
+        ]
+        forbidden_verbs_str = ', '.join(forbidden_verbs)
+        
+        forbidden_instruction = f"IMPORTANT: Do NOT use any of the following adjectives in your writing: {forbidden_adjectives_str}. IMPORTANT: Do NOT use any of the following nouns in your writing: {forbidden_nouns_str}. IMPORTANT: Do NOT use any of the following verbs in your writing: {forbidden_verbs_str}."
 
         # Create more specific prompts based on the selected tone
         tone_instructions = {
