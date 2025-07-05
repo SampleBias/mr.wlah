@@ -24,6 +24,9 @@ let currentUser = {
     lastResetDate: null
 };
 
+// Subscription check interval for periodic refresh
+let subscriptionCheckInterval = null;
+
 /**
  * Initialize the rate limiting functionality
  */
@@ -114,6 +117,27 @@ function setUsageLimitFromSubscription(subscription) {
 }
 
 /**
+ * Refresh subscription info from server
+ * Call this when user tries to transform after hitting limit
+ */
+async function refreshSubscriptionInfo() {
+    console.log('[Rate Limit] Refreshing subscription info...');
+    await fetchUserSubscriptionInfo();
+    
+    // Update the usage display
+    updateUsageDisplay();
+    
+    // If user now has more usage available, hide the modal
+    if (!hasReachedUsageLimit()) {
+        subscriptionModal.style.display = 'none';
+        console.log('[Rate Limit] Subscription updated - user can now continue');
+        return true;
+    }
+    
+    return false;
+}
+
+/**
  * Save user usage data to localStorage
  */
 function saveUserUsageData() {
@@ -131,7 +155,10 @@ function hookTransformButton() {
         const originalClickListener = transformBtn.onclick;
         
         // Replace with our rate-limited version
-        transformBtn.onclick = function(event) {
+        transformBtn.onclick = async function(event) {
+            // First, refresh subscription info to check for updates
+            await fetchUserSubscriptionInfo();
+            
             // Check if user has reached their limit
             if (hasReachedUsageLimit()) {
                 event.preventDefault();
@@ -203,6 +230,20 @@ function showSubscriptionModal() {
     
     // Show modal
     subscriptionModal.style.display = 'block';
+    
+    // Start periodic checking
+    if (subscriptionCheckInterval) {
+        clearInterval(subscriptionCheckInterval);
+    }
+    
+    subscriptionCheckInterval = setInterval(async () => {
+        if (subscriptionModal.style.display === 'block') {
+            await refreshSubscriptionInfo();
+        } else {
+            clearInterval(subscriptionCheckInterval);
+            subscriptionCheckInterval = null;
+        }
+    }, 30000); // Check every 30 seconds
 }
 
 /**
@@ -222,6 +263,36 @@ function setupSubscriptionModalListeners() {
     if (closeSubscriptionButton) {
         closeSubscriptionButton.addEventListener('click', () => {
             subscriptionModal.style.display = 'none';
+            // Clear interval when modal is closed
+            if (subscriptionCheckInterval) {
+                clearInterval(subscriptionCheckInterval);
+                subscriptionCheckInterval = null;
+            }
+        });
+    }
+    
+    // Add refresh button listener
+    const refreshBtn = document.getElementById('refresh-subscription-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+            refreshBtn.textContent = 'Checking...';
+            refreshBtn.disabled = true;
+            
+            const updated = await refreshSubscriptionInfo();
+            
+            if (updated) {
+                refreshBtn.textContent = 'Updated! You can now continue';
+                setTimeout(() => {
+                    refreshBtn.textContent = 'Check Subscription Status';
+                    refreshBtn.disabled = false;
+                }, 2000);
+            } else {
+                refreshBtn.textContent = 'No changes detected';
+                setTimeout(() => {
+                    refreshBtn.textContent = 'Check Subscription Status';
+                    refreshBtn.disabled = false;
+                }, 2000);
+            }
         });
     }
     
@@ -229,6 +300,11 @@ function setupSubscriptionModalListeners() {
     window.addEventListener('click', (event) => {
         if (event.target === subscriptionModal) {
             subscriptionModal.style.display = 'none';
+            // Clear interval when modal is closed
+            if (subscriptionCheckInterval) {
+                clearInterval(subscriptionCheckInterval);
+                subscriptionCheckInterval = null;
+            }
         }
     });
 }
