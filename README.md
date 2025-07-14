@@ -10,7 +10,7 @@ Mr. Wlah is a Flask application that transforms AI-generated content into human-
 - Preserve original font styling in transformed content
 - Download or copy transformed content
 - Minimalist, futuristic design with pixel typography
-- Powered by Google Gemini 2.0 Flash AI model
+- Powered by Google Gemini 2.5 Pro AI model
 - User authentication via Auth0
 - Data storage with MongoDB
 
@@ -41,7 +41,7 @@ To run the application, you'll need to set up the following environment variable
 ### Google Gemini API
 
 - `GEMINI_API_KEY`: Your Google Gemini API key for text transformation
-- `GEMINI_MODEL`: The Gemini model to use (default: gemini-2.0-flash)
+- `GEMINI_MODEL`: The Gemini model to use (default: gemini-2.5-pro)
 
 ### Auth0 Configuration
 

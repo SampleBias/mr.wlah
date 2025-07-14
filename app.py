@@ -61,7 +61,7 @@ app.config['SESSION_USE_SIGNER'] = True
 # Configure Google Gemini API
 api_key = os.getenv('GEMINI_API_KEY')
 genai_client = genai.Client(api_key=api_key)
-model_name = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
+model_name = os.getenv('GEMINI_MODEL', 'gemini-2.5-pro')
 
 # Configure MongoDB - explicitly set the MongoDB URI for BenchAI
 # This ensures we don't use any potentially incorrect values from .env

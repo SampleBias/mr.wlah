@@ -43,7 +43,7 @@ if [ ! -f ".env" ]; then
 
 # Google Gemini API
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-2.5-pro
 
 # Auth0 Configuration
 AUTH0_DOMAIN=your-tenant.auth0.com
