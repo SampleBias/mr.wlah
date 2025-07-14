@@ -111,67 +111,26 @@
         </main>
     </div>
 
-    <!-- Subscription Modal -->
-    <div id="subscription-modal" class="subscription-modal">
-        <div class="subscription-content">
-            <span class="close-subscription">&times;</span>
-            <h2>Usage Limit Reached</h2>
-            <div class="usage-indicator">
-                <p>You have used <span class="usage-count">2/2</span> free transformations</p>
-            </div>
-            <p>Upgrade to continue transforming your text and unlock additional features.</p>
-            
-            <!-- Check Subscription Status Button -->
-            <div style="text-align: center; margin: 20px 0;">
-                <button id="refresh-subscription-btn" class="pixel-btn" style="background-color: var(--primary-color); color: var(--dark-bg); padding: 10px 20px; font-size: 1rem;">
-                    Check Subscription Status
-                </button>
+    <!-- Donation Modal -->
+    <div id="donation-modal" class="donation-modal">
+        <div class="donation-content">
+            <span class="close-donation">&times;</span>
+            <h2>Support Mr. Wlah</h2>
+            <div class="donation-message">
+                <p>Welcome to Mr. Wlah! 🎉</p>
+                <p>This tool is completely <strong>free</strong> and <strong>unlimited</strong> for everyone!</p>
+                <p>If you find it helpful, consider making a one-time donation to help keep this project running and support future development.</p>
             </div>
             
-            <div class="subscription-plans">
-                <div class="plan-card">
-                    <div class="plan-name">Basic</div>
-                    <div class="plan-price">$3.99/mo</div>
-                    <ul class="plan-features">
-                        <li>10 transformations per month</li>
-                        <li>Priority support</li>
-                        <li>Basic formatting options</li>
-                    </ul>
-                    <a href="https://buy.stripe.com/8wMbLb7fa6kW8bmcN1" target="_blank">
-                        <button class="subscribe-btn">Subscribe</button>
-                    </a>
-                </div>
-                
-                <div class="plan-card popular">
-                    <div class="popular-tag">Popular</div>
-                    <div class="plan-name">Pro</div>
-                    <div class="plan-price">$9.99/mo</div>
-                    <ul class="plan-features">
-                        <li>25 transformations per month</li>
-                        <li>Priority support</li>
-                        <li>Advanced formatting options</li>
-                        <li>PDF and DOC export</li>
-                    </ul>
-                    <a href="https://buy.stripe.com/6oE8yZ1UQaBc63efZc" target="_blank">
-                        <button class="subscribe-btn">Subscribe</button>
-                    </a>
-                </div>
-                
-                <div class="plan-card">
-                    <div class="plan-name">Unlimited</div>
-                    <div class="plan-price">$49.99/mo</div>
-                    <div class="plan-discount">$69.99/mo</div>
-                    <ul class="plan-features">
-                        <li>Unlimited transformations</li>
-                        <li>Premium support</li>
-                        <li>All formatting options</li>
-                        <li>All export formats</li>
-                        <li>API access</li>
-                    </ul>
-                    <a href="https://buy.stripe.com/4gwbLb8je4cObny00d" target="_blank">
-                        <button class="subscribe-btn">Subscribe</button>
-                    </a>
-                </div>
+            <div class="donation-action">
+                <a href="https://buy.stripe.com/5kQdR8ahqbyscd95Kl2Ry0g" target="_blank">
+                    <button class="donate-btn">Make a Donation ❤️</button>
+                </a>
+                <button id="maybe-later-btn" class="maybe-later-btn">Maybe Later</button>
+            </div>
+            
+            <div class="donation-footer">
+                <p>Thank you for using Mr. Wlah! Enjoy unlimited text transformations.</p>
             </div>
         </div>
     </div>

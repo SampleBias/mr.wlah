@@ -74,6 +74,11 @@ function updateUIWithServerAuth(user) {
         logout();
     };
     
+    // Show donation popup if available (only once per session)
+    if (typeof window.showDonationPopupOnLogin === 'function') {
+        window.showDonationPopupOnLogin();
+    }
+    
     // Create a user profile element if it doesn't exist
     if (!document.getElementById('user-profile') && user) {
         const headerNav = document.querySelector('nav ul');

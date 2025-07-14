@@ -465,13 +465,7 @@ def document_processing_status():
         'progress': 100
     })
 
-# User subscription configurations
-SUBSCRIPTION_LIMITS = {
-    'FREE': 2,
-    'BASIC': 10,
-    'PRO': 25,
-    'UNLIMITED': float('inf')
-}
+# User subscription configurations removed - no limits now
 
 # Admin PIN for admin panel access (should be stored in env var in production)
 ADMIN_PIN = os.getenv('ADMIN_PIN', '')  # Default for development only
@@ -625,10 +619,7 @@ def admin_get_users():
                     user['lastActive'] = user['last_login']
                 elif 'lastActive' not in user:
                     user['lastActive'] = user.get('createdAt', None) or user.get('created_at', None)
-                if 'subscription' not in user:
-                    user['subscription'] = 'FREE'
-                if 'usageCount' not in user:
-                    user['usageCount'] = 0
+                # Subscription and usage count fields removed
                 if 'name' not in user and 'email' in user:
                     user['name'] = user['email'].split('@')[0]
                 elif 'name' not in user:
@@ -645,8 +636,6 @@ def admin_get_users():
                         '_id': 'sample-admin',
                         'name': admin_profile.get('name', 'Admin User'),
                         'email': admin_profile.get('email', 'admin@example.com'),
-                        'subscription': 'UNLIMITED',
-                        'usageCount': 0,
                         'lastActive': datetime.datetime.now().isoformat(),
                         'user_id': admin_profile.get('user_id'),
                         'isCurrentAdmin': True
@@ -656,8 +645,6 @@ def admin_get_users():
                         '_id': 'sample-1',
                         'name': 'Sample User',
                         'email': 'user@example.com',
-                        'subscription': 'FREE',
-                        'usageCount': 1,
                         'lastActive': datetime.datetime.now().isoformat(),
                         'user_id': 'sample-user-id'
                     })
@@ -671,8 +658,6 @@ def admin_get_users():
                     '_id': 'admin-id',
                     'name': admin_profile.get('name', 'Admin User'),
                     'email': admin_profile.get('email', 'admin@example.com'),
-                    'subscription': 'UNLIMITED',
-                    'usageCount': 0,
                     'lastActive': datetime.datetime.now().isoformat(),
                     'user_id': admin_profile.get('user_id'),
                     'isCurrentAdmin': True
@@ -681,8 +666,6 @@ def admin_get_users():
                 '_id': 'sample-1',
                 'name': 'Sample User',
                 'email': 'user@example.com',
-                'subscription': 'FREE',
-                'usageCount': 1,
                 'lastActive': datetime.datetime.now().isoformat(),
                 'user_id': 'sample-user-id'
             })
@@ -691,108 +674,7 @@ def admin_get_users():
         add_system_log(f"Error fetching users: {str(e)}", "ERROR")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/user/<user_id>/grant', methods=['POST'])
-def admin_grant_subscription(user_id):
-    """Grant subscription to user"""
-    # Check if admin
-    if not session.get('is_admin', False):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    data = request.json
-    subscription = data.get('subscription', '').upper()
-    
-    if subscription not in SUBSCRIPTION_LIMITS:
-        return jsonify({'error': 'Invalid subscription type'}), 400
-    
-    try:
-        if users_collection is not None:
-            # First try to find user by user_id field (primary identifier)
-            user = users_collection.find_one({'user_id': user_id})
-            
-            # If not found, try other identifiers as fallback
-            if not user and ObjectId.is_valid(user_id):
-                user = users_collection.find_one({'_id': ObjectId(user_id)})
-            if not user:
-                user = users_collection.find_one({'auth0Id': user_id})
-            
-            if not user:
-                return jsonify({'error': 'User not found'}), 404
-                
-            # Update user subscription
-            update_result = users_collection.update_one(
-                {'_id': user['_id']},
-                {'$set': {
-                    'subscription': subscription,
-                    'subscriptionUpdatedAt': datetime.datetime.utcnow(),
-                    'user_id': user.get('auth0Id', user_id)  # Ensure user_id is set
-                }}
-            )
-            
-            # Log the update
-            if update_result.modified_count > 0:
-                add_system_log(f"Admin granted {subscription} subscription to user {user_id} (name: {user.get('name', 'Unknown')})", "INFO")
-            else:
-                add_system_log(f"Admin attempted to grant {subscription} subscription to user {user_id}, but no changes were made", "WARNING")
-            
-            # Reset usage count if upgrading subscription
-            users_collection.update_one(
-                {'_id': user['_id']},
-                {'$set': {'usageCount': 0}}
-            )
-            
-            return jsonify({'success': True})
-        else:
-            # Mock response for no DB
-            return jsonify({'success': True})
-    except Exception as e:
-        add_system_log(f"Error granting subscription: {str(e)}", "ERROR")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/admin/user/<user_id>/revoke', methods=['POST'])
-def admin_revoke_subscription(user_id):
-    """Revoke subscription from user"""
-    # Check if admin
-    if not session.get('is_admin', False):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    try:
-        if users_collection is not None:
-            # First try to find user by user_id field (primary identifier)
-            user = users_collection.find_one({'user_id': user_id})
-            
-            # If not found, try other identifiers as fallback
-            if not user and ObjectId.is_valid(user_id):
-                user = users_collection.find_one({'_id': ObjectId(user_id)})
-            if not user:
-                user = users_collection.find_one({'auth0Id': user_id})
-            
-            if not user:
-                return jsonify({'error': 'User not found'}), 404
-            
-            # Update user subscription to FREE
-            update_result = users_collection.update_one(
-                {'_id': user['_id']},
-                {'$set': {
-                    'subscription': 'FREE',
-                    'subscriptionUpdatedAt': datetime.datetime.utcnow(),
-                    'usageCount': 0,  # Reset usage count
-                    'user_id': user.get('auth0Id', user_id)  # Ensure user_id is set
-                }}
-            )
-            
-            # Log the update
-            if update_result.modified_count > 0:
-                add_system_log(f"Admin revoked subscription from user {user_id} (name: {user.get('name', 'Unknown')})", "INFO")
-            else:
-                add_system_log(f"Admin attempted to revoke subscription from user {user_id}, but no changes were made", "WARNING")
-            
-            return jsonify({'success': True})
-        else:
-            # Mock response for no DB
-            return jsonify({'success': True})
-    except Exception as e:
-        add_system_log(f"Error revoking subscription: {str(e)}", "ERROR")
-        return jsonify({'error': str(e)}), 500
+# Admin subscription management endpoints removed - no longer needed
 
 @app.route('/api/admin/user', methods=['POST'])
 def admin_add_user():
@@ -803,16 +685,11 @@ def admin_add_user():
     
     data = request.json
     
-    # Validate required fields
-    required_fields = ['user_id', 'email', 'name', 'subscription']
+    # Validate required fields (removed subscription field)
+    required_fields = ['user_id', 'email', 'name']
     for field in required_fields:
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
-    
-    # Validate subscription type
-    subscription = data.get('subscription', '').upper()
-    if subscription not in SUBSCRIPTION_LIMITS:
-        return jsonify({'error': f'Invalid subscription type: {subscription}'}), 400
     
     try:
         if users_collection is not None:
@@ -822,18 +699,12 @@ def admin_add_user():
             timestamp_now = datetime.datetime.utcnow()
             
             if existing_user:
-                # Update existing user
+                # Update existing user (removed subscription fields)
                 update_data = {
                     'email': data['email'],
                     'name': data['name'],
-                    'subscription': subscription,
-                    'subscriptionUpdatedAt': timestamp_now,
                     'lastActive': timestamp_now
                 }
-                
-                # Add optional fields if provided
-                if 'usageCount' in data:
-                    update_data['usageCount'] = int(data['usageCount'])
                 
                 update_result = users_collection.update_one(
                     {'_id': existing_user['_id']},
@@ -867,9 +738,6 @@ def admin_add_user():
                     'createdAt': timestamp_now,
                     'lastLogin': timestamp_now,
                     'lastActive': timestamp_now,
-                    'subscription': subscription,
-                    'usageCount': int(data.get('usageCount', 0)),
-                    'subscriptionUpdatedAt': timestamp_now,
                     'preferences': {
                         'defaultTone': 'casual',
                         'saveHistory': True
@@ -899,86 +767,7 @@ def admin_add_user():
         add_system_log(f"Error adding/updating user: {str(e)}", "ERROR")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/user/subscription')
-def get_user_subscription():
-    """Get current user's subscription info"""
-    # Get user profile from session
-    profile = session.get('profile')
-    
-    if not profile:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    user_id = profile.get('user_id')
-    
-    try:
-        if users_collection is not None:
-            # Get user from database - prioritize user_id field
-            user = users_collection.find_one({'user_id': user_id})
-            
-            # Fallback to auth0Id if not found by user_id
-            if not user:
-                user = users_collection.find_one({'auth0Id': user_id})
-            
-            if user:
-                # Return subscription info
-                subscription_data = {
-                    'subscription': user.get('subscription', 'FREE'),
-                    'usageCount': user.get('usageCount', 0),
-                    'usageLimit': SUBSCRIPTION_LIMITS.get(user.get('subscription', 'FREE'), SUBSCRIPTION_LIMITS['FREE']),
-                    'lastResetDate': user.get('lastResetDate'),
-                    'user_id': user_id
-                }
-                
-                # Add extra data for debugging
-                add_system_log(f"Retrieved subscription info for user {user_id}: {subscription_data['subscription']}, {subscription_data['usageCount']}/{subscription_data['usageLimit']}", "INFO")
-                
-                return jsonify(subscription_data)
-            else:
-                # User not found, create a new record
-                add_system_log(f"User {user_id} not found in database, creating new record", "INFO")
-                
-                # Create new user with default FREE subscription
-                timestamp_now = datetime.datetime.now()
-                new_user = {
-                    'user_id': user_id,
-                    'auth0Id': user_id,  # Store both for backward compatibility
-                    'email': profile.get('email', ''),
-                    'name': profile.get('name', ''),
-                    'createdAt': timestamp_now,
-                    'lastLogin': timestamp_now,
-                    'lastActive': timestamp_now,
-                    'subscription': 'FREE',
-                    'usageCount': 0,
-                    'subscriptionUpdatedAt': timestamp_now,
-                    'preferences': {
-                        'defaultTone': 'casual',
-                        'saveHistory': True
-                    }
-                }
-                
-                users_collection.insert_one(new_user)
-                
-                # Return default subscription info
-                return jsonify({
-                    'subscription': 'FREE',
-                    'usageCount': 0,
-                    'usageLimit': SUBSCRIPTION_LIMITS['FREE'],
-                    'lastResetDate': None,
-                    'user_id': user_id
-                })
-                
-        else:
-            # Mock response for no DB
-            return jsonify({
-                'subscription': 'FREE',
-                'usageCount': 0,
-                'usageLimit': SUBSCRIPTION_LIMITS['FREE'],
-                'lastResetDate': None,
-                'user_id': user_id
-            })
-    except Exception as e:
-        add_system_log(f"Error getting subscription info: {str(e)}", "ERROR")
-        return jsonify({'error': str(e)}), 500
+# Subscription endpoint removed - no longer needed
 
 @app.route('/api/user/record-transformation', methods=['POST'])
 def record_transformation():
@@ -1005,11 +794,10 @@ def record_transformation():
                 user = users_collection.find_one({'auth0Id': user_id})
             
             if user:
-                # Update existing user
+                # Update existing user (removed usage count increment)
                 users_collection.update_one(
                     {'_id': user['_id']},
                     {
-                        '$inc': {'usageCount': 1},
                         '$set': {
                             'lastActive': timestamp,
                             # Ensure user_id is always set
@@ -1021,7 +809,7 @@ def record_transformation():
                 # If user not found, create a new record
                 add_system_log(f"User {user_id} not found in database for recording transformation, creating new record", "INFO")
                 
-                # Create new user with default FREE subscription
+                # Create new user (removed subscription fields)
                 timestamp_now = datetime.datetime.now()
                 new_user = {
                     'user_id': user_id,
@@ -1031,9 +819,6 @@ def record_transformation():
                     'createdAt': timestamp_now,
                     'lastLogin': timestamp_now,
                     'lastActive': timestamp_now,
-                    'subscription': 'FREE',
-                    'usageCount': 1,  # Start with the current transformation
-                    'subscriptionUpdatedAt': timestamp_now,
                     'preferences': {
                         'defaultTone': 'casual',
                         'saveHistory': True
@@ -1070,29 +855,7 @@ def transform_text():
     
     user_id = profile.get('user_id')
     
-    # Check if user has reached usage limit
-    if users_collection is not None:
-        # First look for user by user_id
-        user = users_collection.find_one({'user_id': user_id})
-        
-        # If not found, fallback to auth0Id
-        if not user:
-            user = users_collection.find_one({'auth0Id': user_id})
-        
-        if user:
-            subscription = user.get('subscription', 'FREE')
-            usage_count = user.get('usageCount', 0)
-            
-            # Get limit based on subscription
-            usage_limit = SUBSCRIPTION_LIMITS.get(subscription, SUBSCRIPTION_LIMITS['FREE'])
-            
-            # Check if user has exceeded limit
-            if usage_count >= usage_limit and subscription != 'UNLIMITED':
-                add_system_log(f"User {user_id} exceeded usage limit ({usage_count}/{usage_limit})", "INFO")
-                return jsonify({
-                    'error': 'Usage limit exceeded',
-                    'message': 'You have reached your usage limit. Please upgrade your subscription to continue.'
-                }), 402  # 402 Payment Required
+    # Rate limiting removed - allow unlimited transformations
     
     try:
         # Check if this is a file upload from FormData
@@ -1407,9 +1170,6 @@ def callback():
                         'createdAt': timestamp_now,      # Match existing field format in db
                         'lastLogin': timestamp_now,      # Match existing field format in db
                         'lastActive': timestamp_now,     # For admin panel compatibility
-                        'subscription': 'FREE',          # Default subscription
-                        'usageCount': 0,                 # Initialize usage counter
-                        'subscriptionUpdatedAt': timestamp_now,
                         'preferences': {                 # Add user preferences
                             'defaultTone': 'casual',
                             'saveHistory': True
@@ -1436,11 +1196,7 @@ def callback():
                     if userinfo.get('email'):
                         updates['email'] = userinfo.get('email')
                         
-                    # Add missing fields if they don't exist
-                    if 'subscription' not in user:
-                        updates['subscription'] = 'FREE'
-                    if 'usageCount' not in user:
-                        updates['usageCount'] = 0
+                    # Add missing fields if they don't exist (subscription and usage count removed)
                     if 'preferences' not in user:
                         updates['preferences'] = {
                             'defaultTone': 'casual',
@@ -1743,8 +1499,6 @@ def test_users_collection():
             'createdAt': datetime.datetime.utcnow(),
             'lastLogin': datetime.datetime.utcnow(),
             'lastActive': datetime.datetime.utcnow(),
-            'subscription': 'FREE',
-            'usageCount': 0,
             'preferences': {
                 'defaultTone': 'casual',
                 'saveHistory': True
@@ -1799,11 +1553,7 @@ def migrate_existing_users():
             if 'lastActive' not in user and 'lastLogin' in user:
                 updates['lastActive'] = user['lastLogin']
             
-            if 'subscription' not in user:
-                updates['subscription'] = 'FREE'
-            
-            if 'usageCount' not in user:
-                updates['usageCount'] = 0
+            # Subscription and usage count fields removed
             
             if 'preferences' not in user:
                 updates['preferences'] = {

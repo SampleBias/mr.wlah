@@ -576,8 +576,8 @@ footer {
     }
 }
 
-/* Subscription Modal */
-.subscription-modal {
+/* Donation Modal */
+.donation-modal {
     display: none;
     position: fixed;
     z-index: 1000;
@@ -590,16 +590,17 @@ footer {
     backdrop-filter: blur(4px);
 }
 
-.subscription-content {
+.donation-content {
     position: relative;
     background-color: var(--dark-bg);
     margin: 10% auto;
     padding: 25px;
     border: var(--pixel-border);
     width: 80%;
-    max-width: 600px;
+    max-width: 500px;
     box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
     animation: modalGlow 2s infinite alternate;
+    text-align: center;
 }
 
 @keyframes modalGlow {
@@ -611,7 +612,7 @@ footer {
     }
 }
 
-.subscription-modal h2 {
+.donation-modal h2 {
     margin-top: 0;
     color: var(--primary-color);
     font-size: 2.2rem;
@@ -619,130 +620,88 @@ footer {
     text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
 }
 
-.subscription-modal p {
-    margin-bottom: 20px;
-    font-size: 1.2rem;
+.donation-modal p {
+    margin-bottom: 15px;
+    font-size: 1.1rem;
     line-height: 1.6;
 }
 
-.subscription-plans {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    justify-content: center;
-    margin: 30px 0;
-}
-
-.plan-card {
-    background-color: var(--light-bg);
-    border: 2px solid var(--primary-color);
+.donation-message {
+    margin: 20px 0;
     padding: 20px;
-    width: 100%;
-    max-width: 260px;
-    text-align: center;
-    position: relative;
-    transition: all 0.3s ease;
+    background-color: var(--light-bg);
+    border-radius: 8px;
+    border: 1px solid var(--primary-color);
 }
 
-.plan-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 10px 20px rgba(0, 240, 255, 0.3);
+.donation-message p {
+    margin-bottom: 10px;
 }
 
-.plan-card.popular {
-    border-color: var(--secondary-color);
+.donation-message p:last-child {
+    margin-bottom: 0;
 }
 
-.popular-tag {
-    position: absolute;
-    top: -15px;
-    right: -15px;
+.donation-action {
+    margin: 30px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+}
+
+.donate-btn {
+    padding: 15px 30px;
     background-color: var(--secondary-color);
     color: var(--dark-bg);
-    padding: 5px 10px;
-    font-size: 0.8rem;
-    border-radius: 3px;
-    transform: rotate(15deg);
-}
-
-.plan-name {
-    color: var(--primary-color);
-    font-size: 1.8rem;
-    margin-bottom: 10px;
-}
-
-.plan-card.popular .plan-name {
-    color: var(--secondary-color);
-}
-
-.plan-price {
-    font-size: 2.2rem;
-    margin-bottom: 5px;
-}
-
-.plan-discount {
-    font-size: 1rem;
-    color: #aaa;
-    text-decoration: line-through;
-    margin-bottom: 15px;
-}
-
-.plan-features {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 20px 0;
-    text-align: left;
-}
-
-.plan-features li {
-    margin-bottom: 10px;
-    position: relative;
-    padding-left: 25px;
-}
-
-.plan-features li:before {
-    content: ">";
-    color: var(--primary-color);
-    position: absolute;
-    left: 0;
-}
-
-.plan-card.popular .plan-features li:before {
-    color: var(--secondary-color);
-}
-
-.subscribe-btn {
-    padding: 12px 20px;
-    background-color: var(--dark-bg);
-    color: var(--primary-color);
-    border: 2px solid var(--primary-color);
+    border: 2px solid var(--secondary-color);
     font-family: 'VT323', monospace;
-    font-size: 1.2rem;
+    font-size: 1.4rem;
     letter-spacing: 1px;
     cursor: pointer;
     text-transform: uppercase;
     transition: all 0.3s ease;
-    width: 100%;
+    text-decoration: none;
+    display: inline-block;
+    border-radius: 4px;
+    font-weight: bold;
 }
 
-.subscribe-btn:hover {
-    background-color: var(--primary-color);
-    color: var(--dark-bg);
-    box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
-}
-
-.plan-card.popular .subscribe-btn {
-    border-color: var(--secondary-color);
+.donate-btn:hover {
+    background-color: var(--dark-bg);
     color: var(--secondary-color);
+    box-shadow: 0 0 20px rgba(255, 0, 170, 0.5);
+    transform: translateY(-2px);
 }
 
-.plan-card.popular .subscribe-btn:hover {
-    background-color: var(--secondary-color);
+.maybe-later-btn {
+    padding: 10px 20px;
+    background-color: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--text-color);
+    font-family: 'VT323', monospace;
+    font-size: 1rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 4px;
+}
+
+.maybe-later-btn:hover {
+    background-color: var(--text-color);
     color: var(--dark-bg);
-    box-shadow: 0 0 15px rgba(255, 0, 170, 0.5);
+    box-shadow: 0 0 10px rgba(240, 240, 240, 0.3);
 }
 
-.close-subscription {
+.donation-footer {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--primary-color);
+    color: var(--text-color);
+    font-size: 0.9rem;
+}
+
+.close-donation {
     position: absolute;
     top: 10px;
     right: 20px;
@@ -752,25 +711,11 @@ footer {
     transition: color 0.3s ease;
 }
 
-.close-subscription:hover {
+.close-donation:hover {
     color: var(--primary-color);
 }
 
-.usage-indicator {
-    margin-bottom: 15px;
-    text-align: center;
-}
-
-.usage-count {
-    display: inline-block;
-    background-color: var(--light-bg);
-    color: var(--primary-color);
-    padding: 5px 15px;
-    border: 1px solid var(--primary-color);
-    border-radius: 3px;
-    font-size: 1.2rem;
-    margin-top: 5px;
-}
+/* Usage indicator styles removed - no longer needed */
 
 /* Admin Panel Styles */
 .admin-container {
@@ -955,13 +900,9 @@ footer {
 
 /* Responsive design for admin panel */
 @media (max-width: 768px) {
-    .subscription-plans {
+    .donation-action {
         flex-direction: column;
         align-items: center;
-    }
-    
-    .plan-card {
-        max-width: 100%;
     }
     
     .pin-input input {

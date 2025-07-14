@@ -152,13 +152,7 @@
                 
                 <div class="search-filter">
                     <input type="text" id="user-search" placeholder="Search by email or name...">
-                    <select id="plan-filter">
-                        <option value="all">All Plans</option>
-                        <option value="free">Free</option>
-                        <option value="basic">Basic</option>
-                        <option value="pro">Pro</option>
-                        <option value="unlimited">Unlimited</option>
-                    </select>
+                    <!-- Plan filter removed - no longer needed -->
                     <button id="refresh-users" class="admin-btn">Refresh Users</button>
                     <a href="/admin/add_user.html" class="admin-btn" style="text-decoration: none; display: inline-block;">Add New User</a>
                 </div>
@@ -168,8 +162,6 @@
                         <tr>
                             <th>User</th>
                             <th>Email</th>
-                            <th>Current Plan</th>
-                            <th>Usage</th>
                             <th>Last Active</th>
                             <th>Actions</th>
                         </tr>
@@ -223,7 +215,7 @@
         const loginError = document.getElementById('login-error');
         const usersTableBody = document.getElementById('users-table-body');
         const userSearch = document.getElementById('user-search');
-        const planFilter = document.getElementById('plan-filter');
+        // Plan filter removed
         
         adminLoginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -362,7 +354,7 @@
             
             // Get filter values
             const searchTerm = userSearch.value.toLowerCase();
-            const planFilterValue = planFilter.value;
+            // Plan filter removed
 
             // Show debugging information
             const debugInfo = document.getElementById('debug-info');
@@ -388,18 +380,14 @@
                     (user.name || '')?.toLowerCase().includes(searchTerm) || 
                     (user.email || '')?.toLowerCase().includes(searchTerm);
                 
-                const userSubscription = (user.subscription || 'FREE').toLowerCase();
-                const matchesPlan = planFilterValue === 'all' || 
-                    userSubscription === planFilterValue;
-                
-                return matchesSearch && matchesPlan;
+                return matchesSearch;
             });
             
             // Check if we have any filtered users
             if (filteredUsers.length === 0) {
                 usersTableBody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="no-users">No users match your search criteria.</td>
+                        <td colspan="4" class="no-users">No users match your search criteria.</td>
                     </tr>
                 `;
                 return;
@@ -430,27 +418,16 @@
                     }
                 }
                 
-                // Determine usage display
-                const userSubscription = user.subscription?.toUpperCase() || 'FREE';
-                const usageDisplay = userSubscription === 'UNLIMITED' 
-                    ? `${user.usageCount || 0} / ∞` 
-                    : `${user.usageCount || 0} / ${getUserLimit(userSubscription)}`;
-                
                 // Set userId (support both user_id and _id)
                 const userId = user.user_id || user._id || '';
                 
-                // Create the row
+                // Create the row (removed subscription and usage columns)
                 row.innerHTML = `
                     <td>${user.name || 'Unknown'}${isCurrentAdmin ? ' (You)' : ''}</td>
                     <td>${user.email || 'No email'}</td>
-                    <td>${userSubscription}</td>
-                    <td>${usageDisplay}</td>
                     <td>${lastActive}</td>
                     <td class="admin-actions">
-                        <button class="admin-btn grant" data-user-id="${userId}" data-action="grant-basic">Basic</button>
-                        <button class="admin-btn grant" data-user-id="${userId}" data-action="grant-pro">Pro</button>
-                        <button class="admin-btn grant" data-user-id="${userId}" data-action="grant-unlimited">Unlimited</button>
-                        <button class="admin-btn revoke" data-user-id="${userId}" data-action="revoke">Revoke</button>
+                        <!-- Subscription management buttons removed -->
                     </td>
                 `;
                 
@@ -458,7 +435,7 @@
             });
             
             // Add action button listeners
-            addActionButtonListeners();
+            // Subscription action button listeners removed
             
             // Update debug info with additional information about current admin status
             debugInfo.textContent += `Current admin found in user list: ${foundCurrentAdmin}\n`;
@@ -481,65 +458,16 @@
                 });
         }
         
-        // Get user limit based on subscription
-        function getUserLimit(subscription) {
-            switch (subscription?.toUpperCase()) {
-                case 'BASIC': return 10;
-                case 'PRO': return 25;
-                case 'UNLIMITED': return '∞';
-                default: return 2;
-            }
-        }
+        // Subscription-related functions removed
         
-        // Add listeners to action buttons
-        function addActionButtonListeners() {
-            document.querySelectorAll('.admin-btn').forEach(button => {
-                button.addEventListener('click', async () => {
-                    const userId = button.dataset.userId;
-                    const action = button.dataset.action;
-                    
-                    if (!userId || !action) return;
-                    
-                    try {
-                        let endpoint = '/api/admin/user/';
-                        let subscription = null;
-                        
-                        if (action === 'revoke') {
-                            endpoint += `${userId}/revoke`;
-                        } else if (action.startsWith('grant-')) {
-                            subscription = action.replace('grant-', '');
-                            endpoint += `${userId}/grant`;
-                        }
-                        
-                        const response = await fetch(endpoint, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ subscription })
-                        });
-                        
-                        if (response.ok) {
-                            // Reload users after action
-                            loadUsers();
-                        } else {
-                            console.error('Error performing action');
-                        }
-                    } catch (error) {
-                        console.error('Error performing action:', error);
-                    }
-                });
-            });
-        }
+        // Subscription action button listeners removed
         
         // Search and filter functionality
         userSearch.addEventListener('input', () => {
             loadUsers();
         });
         
-        planFilter.addEventListener('change', () => {
-            loadUsers();
-        });
+        // Plan filter event listener removed
         
         // Add this at the end of the script tag, just before the DOMContentLoaded event
         document.getElementById('toggle-debug').addEventListener('click', () => {

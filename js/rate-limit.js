@@ -1,313 +1,106 @@
 /**
- * Rate limiting functionality for Mr. Wlah application
- * Controls usage limits and subscription prompts
+ * Donation popup functionality for Mr. Wlah application
+ * Shows a donation request popup on login
  */
 
-// Configuration for rate limits based on subscription tiers
-const RATE_LIMITS = {
-    FREE: 2,               // Free tier: 2 transformations total
-    BASIC: 10,             // Basic plan: 10 transformations per month
-    PRO: 25,               // Pro plan: 25 transformations per month
-    UNLIMITED: Infinity    // Unlimited plan: No limit
-};
+// DOM Elements for donation modal
+const donationModal = document.getElementById('donation-modal');
+const closeDonationButton = document.querySelector('.close-donation');
+const maybeLaterButton = document.getElementById('maybe-later-btn');
 
-// DOM Elements for subscription modal
-const subscriptionModal = document.getElementById('subscription-modal');
-const closeSubscriptionButton = document.querySelector('.close-subscription');
-const usageCountDisplay = document.querySelector('.usage-count');
-
-// Initialize rate limiting system
-let currentUser = {
-    subscription: 'FREE',
-    usageCount: 0,
-    usageLimit: RATE_LIMITS.FREE,
-    lastResetDate: null
-};
-
-// Subscription check interval for periodic refresh
-let subscriptionCheckInterval = null;
+// Flag to track if donation popup has been shown this session
+let donationPopupShown = sessionStorage.getItem('donationPopupShown') === 'true';
 
 /**
- * Initialize the rate limiting functionality
+ * Initialize the donation popup functionality
  */
-function initRateLimiting() {
-    // Check for existing usage data in localStorage
-    loadUserUsageData();
+function initDonationPopup() {
+    // Set up event listeners for modal
+    setupDonationModalListeners();
     
-    // Add event listeners for modal
-    setupSubscriptionModalListeners();
-    
-    // Hook into transform button
-    hookTransformButton();
-    
-    console.log('[Rate Limit] System initialized with plan:', currentUser.subscription);
-    console.log('[Rate Limit] Current usage:', currentUser.usageCount, '/', currentUser.usageLimit);
+    console.log('[Donation] Donation popup system initialized');
 }
 
 /**
- * Load user's usage data from localStorage or server
+ * Show the donation popup on login
  */
-function loadUserUsageData() {
-    // Try to load from localStorage first (for demo/testing)
-    const savedData = localStorage.getItem('mrwlah_user_usage');
-    
-    if (savedData) {
-        try {
-            const parsedData = JSON.parse(savedData);
-            currentUser = {
-                ...currentUser,
-                ...parsedData
-            };
-            console.log('[Rate Limit] Loaded user data from storage:', currentUser);
-        } catch (e) {
-            console.error('[Rate Limit] Error parsing saved usage data:', e);
-        }
-    }
-    
-    // Otherwise, make server request to get current user info
-    fetchUserSubscriptionInfo();
-}
-
-/**
- * Fetch subscription info from the server
- */
-async function fetchUserSubscriptionInfo() {
-    try {
-        const response = await fetch('/api/user/subscription');
-        if (response.ok) {
-            const data = await response.json();
-            
-            // Update current user with server data
-            if (data.subscription) {
-                currentUser.subscription = data.subscription;
-                currentUser.usageCount = data.usageCount || 0;
-                currentUser.lastResetDate = data.lastResetDate;
-                
-                // Set usage limit based on subscription
-                setUsageLimitFromSubscription(currentUser.subscription);
-                
-                // Save to localStorage for quick access
-                saveUserUsageData();
-                
-                console.log('[Rate Limit] Updated user data from server:', currentUser);
-            }
-        }
-    } catch (error) {
-        console.error('[Rate Limit] Error fetching subscription info:', error);
-    }
-}
-
-/**
- * Set usage limit based on subscription level
- */
-function setUsageLimitFromSubscription(subscription) {
-    switch (subscription.toUpperCase()) {
-        case 'BASIC':
-            currentUser.usageLimit = RATE_LIMITS.BASIC;
-            break;
-        case 'PRO':
-            currentUser.usageLimit = RATE_LIMITS.PRO;
-            break;
-        case 'UNLIMITED':
-            currentUser.usageLimit = RATE_LIMITS.UNLIMITED;
-            break;
-        default:
-            currentUser.usageLimit = RATE_LIMITS.FREE;
-    }
-}
-
-/**
- * Refresh subscription info from server
- * Call this when user tries to transform after hitting limit
- */
-async function refreshSubscriptionInfo() {
-    console.log('[Rate Limit] Refreshing subscription info...');
-    await fetchUserSubscriptionInfo();
-    
-    // Update the usage display
-    updateUsageDisplay();
-    
-    // If user now has more usage available, hide the modal
-    if (!hasReachedUsageLimit()) {
-        subscriptionModal.style.display = 'none';
-        console.log('[Rate Limit] Subscription updated - user can now continue');
-        return true;
-    }
-    
-    return false;
-}
-
-/**
- * Save user usage data to localStorage
- */
-function saveUserUsageData() {
-    localStorage.setItem('mrwlah_user_usage', JSON.stringify(currentUser));
-}
-
-/**
- * Hook into the transform button to check usage limits
- */
-function hookTransformButton() {
-    const transformBtn = document.getElementById('transform-btn');
-    
-    if (transformBtn) {
-        // Store the original click listener
-        const originalClickListener = transformBtn.onclick;
+function showDonationPopupOnLogin() {
+    // Only show if not already shown this session
+    if (!donationPopupShown) {
+        // Check if this is a fresh login (not just a page reload)
+        const lastShown = localStorage.getItem('donationPopupLastShown');
+        const now = Date.now();
+        const oneWeek = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
         
-        // Replace with our rate-limited version
-        transformBtn.onclick = async function(event) {
-            // First, refresh subscription info to check for updates
-            await fetchUserSubscriptionInfo();
-            
-            // Check if user has reached their limit
-            if (hasReachedUsageLimit()) {
-                event.preventDefault();
-                event.stopPropagation();
-                
-                // Show subscription modal
-                showSubscriptionModal();
-                return false;
-            }
-            
-            // If not at limit, increment count and proceed
-            incrementUsageCount();
-            
-            // Call original handler if it exists
-            if (typeof originalClickListener === 'function') {
-                return originalClickListener.call(this, event);
-            }
-        };
-    }
-}
-
-/**
- * Check if user has reached their usage limit
- */
-function hasReachedUsageLimit() {
-    return currentUser.usageCount >= currentUser.usageLimit;
-}
-
-/**
- * Increment usage count
- */
-function incrementUsageCount() {
-    currentUser.usageCount++;
-    
-    // Record transformation in server
-    recordTransformation();
-    
-    // Update local storage
-    saveUserUsageData();
-    
-    console.log('[Rate Limit] Usage count incremented:', currentUser.usageCount, '/', currentUser.usageLimit);
-}
-
-/**
- * Record a transformation on the server
- */
-async function recordTransformation() {
-    try {
-        await fetch('/api/user/record-transformation', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                timestamp: new Date().toISOString()
-            })
-        });
-    } catch (error) {
-        console.error('[Rate Limit] Error recording transformation:', error);
-    }
-}
-
-/**
- * Show the subscription modal
- */
-function showSubscriptionModal() {
-    // Update usage display
-    updateUsageDisplay();
-    
-    // Show modal
-    subscriptionModal.style.display = 'block';
-    
-    // Start periodic checking
-    if (subscriptionCheckInterval) {
-        clearInterval(subscriptionCheckInterval);
-    }
-    
-    subscriptionCheckInterval = setInterval(async () => {
-        if (subscriptionModal.style.display === 'block') {
-            await refreshSubscriptionInfo();
+        // Show if never shown or if more than a week has passed
+        if (!lastShown || (now - parseInt(lastShown)) > oneWeek) {
+            setTimeout(() => {
+                showDonationPopup();
+                localStorage.setItem('donationPopupLastShown', now.toString());
+            }, 1500); // Show after 1.5 second delay
         } else {
-            clearInterval(subscriptionCheckInterval);
-            subscriptionCheckInterval = null;
+            console.log('[Donation] Donation popup was shown recently, skipping');
         }
-    }, 30000); // Check every 30 seconds
-}
-
-/**
- * Update the usage display in the subscription modal
- */
-function updateUsageDisplay() {
-    if (usageCountDisplay) {
-        usageCountDisplay.textContent = `${currentUser.usageCount}/${currentUser.usageLimit}`;
     }
 }
 
 /**
- * Set up event listeners for the subscription modal
+ * Show the donation modal
  */
-function setupSubscriptionModalListeners() {
-    // Close button listener
-    if (closeSubscriptionButton) {
-        closeSubscriptionButton.addEventListener('click', () => {
-            subscriptionModal.style.display = 'none';
-            // Clear interval when modal is closed
-            if (subscriptionCheckInterval) {
-                clearInterval(subscriptionCheckInterval);
-                subscriptionCheckInterval = null;
-            }
-        });
+function showDonationPopup() {
+    if (donationModal) {
+        donationModal.style.display = 'block';
+        donationPopupShown = true;
+        sessionStorage.setItem('donationPopupShown', 'true');
+        console.log('[Donation] Showing donation popup');
+    }
+}
+
+/**
+ * Hide the donation modal
+ */
+function hideDonationPopup() {
+    if (donationModal) {
+        donationModal.style.display = 'none';
+        console.log('[Donation] Donation popup closed');
+    }
+}
+
+/**
+ * Set up event listeners for the donation modal
+ */
+function setupDonationModalListeners() {
+    // Close button
+    if (closeDonationButton) {
+        closeDonationButton.addEventListener('click', hideDonationPopup);
     }
     
-    // Add refresh button listener
-    const refreshBtn = document.getElementById('refresh-subscription-btn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', async () => {
-            refreshBtn.textContent = 'Checking...';
-            refreshBtn.disabled = true;
-            
-            const updated = await refreshSubscriptionInfo();
-            
-            if (updated) {
-                refreshBtn.textContent = 'Updated! You can now continue';
-                setTimeout(() => {
-                    refreshBtn.textContent = 'Check Subscription Status';
-                    refreshBtn.disabled = false;
-                }, 2000);
-            } else {
-                refreshBtn.textContent = 'No changes detected';
-                setTimeout(() => {
-                    refreshBtn.textContent = 'Check Subscription Status';
-                    refreshBtn.disabled = false;
-                }, 2000);
-            }
-        });
+    // Maybe later button
+    if (maybeLaterButton) {
+        maybeLaterButton.addEventListener('click', hideDonationPopup);
     }
     
     // Click outside modal to close
-    window.addEventListener('click', (event) => {
-        if (event.target === subscriptionModal) {
-            subscriptionModal.style.display = 'none';
-            // Clear interval when modal is closed
-            if (subscriptionCheckInterval) {
-                clearInterval(subscriptionCheckInterval);
-                subscriptionCheckInterval = null;
+    if (donationModal) {
+        donationModal.addEventListener('click', (event) => {
+            if (event.target === donationModal) {
+                hideDonationPopup();
             }
-        }
-    });
+        });
+    }
 }
 
-// Initialize when document is ready
-document.addEventListener('DOMContentLoaded', initRateLimiting); 
+/**
+ * Initialize donation popup on page load
+ */
+document.addEventListener('DOMContentLoaded', () => {
+    initDonationPopup();
+    
+    // Note: Donation popup will be triggered by auth.js when user logs in
+    console.log('[Donation] Donation popup system ready');
+});
+
+// Export functions for use in other scripts
+window.showDonationPopup = showDonationPopup;
+window.hideDonationPopup = hideDonationPopup;
+window.showDonationPopupOnLogin = showDonationPopupOnLogin; 

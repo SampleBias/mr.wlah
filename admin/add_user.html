@@ -108,15 +108,7 @@
             <input type="email" id="email" placeholder="user@example.com">
         </div>
         
-        <div class="form-group">
-            <label for="subscription">Subscription (required)</label>
-            <select id="subscription">
-                <option value="FREE">FREE</option>
-                <option value="BASIC">BASIC</option>
-                <option value="PRO">PRO</option>
-                <option value="UNLIMITED">UNLIMITED</option>
-            </select>
-        </div>
+        <!-- Subscription field removed - no longer needed -->
         
         <div class="form-group">
             <label for="usageCount">Usage Count</label>
@@ -148,15 +140,13 @@
             
             // Handle form submission
             document.getElementById('submitBtn').addEventListener('click', function() {
-                // Get form values
+                // Get form values (subscription field removed)
                 const userId = document.getElementById('userId').value.trim();
                 const name = document.getElementById('name').value.trim();
                 const email = document.getElementById('email').value.trim();
-                const subscription = document.getElementById('subscription').value;
-                const usageCount = document.getElementById('usageCount').value;
                 
                 // Validate required fields
-                if (!userId || !name || !email || !subscription) {
+                if (!userId || !name || !email) {
                     document.getElementById('result').innerHTML = 'Error: All required fields must be filled.';
                     document.getElementById('result').className = 'result error';
                     document.getElementById('result').style.display = 'block';
@@ -172,13 +162,11 @@
                     return;
                 }
                 
-                // Create user data object
+                // Create user data object (subscription field removed)
                 const userData = {
                     user_id: userId,
                     name: name,
-                    email: email,
-                    subscription: subscription,
-                    usageCount: parseInt(usageCount, 10)
+                    email: email
                 };
                 
                 // Send API request
