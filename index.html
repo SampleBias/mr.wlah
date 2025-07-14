@@ -205,6 +205,11 @@
                             document.head.appendChild(style);
                         }
                     }
+
+                    // Trigger donation popup on login
+                    if (typeof window.showDonationPopupOnLogin === 'function') {
+                        window.showDonationPopupOnLogin();
+                    }
                 } else {
                     console.error("Error checking authentication status");
                     // Default to redirect on error
