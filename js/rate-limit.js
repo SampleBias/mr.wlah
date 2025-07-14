@@ -3,22 +3,36 @@
  * Shows a donation request popup on login
  */
 
-// DOM Elements for donation modal
-const donationModal = document.getElementById('donation-modal');
-const closeDonationButton = document.querySelector('.close-donation');
-const maybeLaterButton = document.getElementById('maybe-later-btn');
+// DOM Elements for donation modal - will be initialized when DOM is ready
+let donationModal = null;
+let closeDonationButton = null;
+let maybeLaterButton = null;
 
 // Flag to track if donation popup has been shown this session
-let donationPopupShown = sessionStorage.getItem('donationPopupShown') === 'true';
+let donationPopupShown = false;
 
 /**
  * Initialize the donation popup functionality
  */
 function initDonationPopup() {
+    // Get DOM elements
+    donationModal = document.getElementById('donation-modal');
+    closeDonationButton = document.querySelector('.close-donation');
+    maybeLaterButton = document.getElementById('maybe-later-btn');
+    
+    // Verify main modal exists
+    if (!donationModal) {
+        return false;
+    }
+    
+    // Check session storage
+    const sessionShown = sessionStorage.getItem('donationPopupShown');
+    donationPopupShown = sessionShown === 'true';
+    
     // Set up event listeners for modal
     setupDonationModalListeners();
     
-    console.log('[Donation] Donation popup system initialized');
+    return true;
 }
 
 /**
@@ -30,16 +44,14 @@ function showDonationPopupOnLogin() {
         // Check if this is a fresh login (not just a page reload)
         const lastShown = localStorage.getItem('donationPopupLastShown');
         const now = Date.now();
-        const oneWeek = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+        const oneDay = 24 * 60 * 60 * 1000; // 1 day in milliseconds
         
-        // Show if never shown or if more than a week has passed
-        if (!lastShown || (now - parseInt(lastShown)) > oneWeek) {
+        // Show if never shown or if more than a day has passed
+        if (!lastShown || (now - parseInt(lastShown)) > oneDay) {
             setTimeout(() => {
                 showDonationPopup();
                 localStorage.setItem('donationPopupLastShown', now.toString());
-            }, 1500); // Show after 1.5 second delay
-        } else {
-            console.log('[Donation] Donation popup was shown recently, skipping');
+            }, 2000); // Show after 2 second delay
         }
     }
 }
@@ -48,12 +60,22 @@ function showDonationPopupOnLogin() {
  * Show the donation modal
  */
 function showDonationPopup() {
-    if (donationModal) {
-        donationModal.style.display = 'block';
-        donationPopupShown = true;
-        sessionStorage.setItem('donationPopupShown', 'true');
-        console.log('[Donation] Showing donation popup');
+    if (!donationModal) {
+        return false;
     }
+    
+    donationModal.style.display = 'block';
+    donationPopupShown = true;
+    sessionStorage.setItem('donationPopupShown', 'true');
+    
+    // Add smooth transition
+    setTimeout(() => {
+        if (donationModal) {
+            donationModal.style.opacity = '1';
+        }
+    }, 100);
+    
+    return true;
 }
 
 /**
@@ -62,7 +84,7 @@ function showDonationPopup() {
 function hideDonationPopup() {
     if (donationModal) {
         donationModal.style.display = 'none';
-        console.log('[Donation] Donation popup closed');
+        donationModal.style.opacity = '0';
     }
 }
 
@@ -72,12 +94,18 @@ function hideDonationPopup() {
 function setupDonationModalListeners() {
     // Close button
     if (closeDonationButton) {
-        closeDonationButton.addEventListener('click', hideDonationPopup);
+        closeDonationButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            hideDonationPopup();
+        });
     }
     
     // Maybe later button
     if (maybeLaterButton) {
-        maybeLaterButton.addEventListener('click', hideDonationPopup);
+        maybeLaterButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            hideDonationPopup();
+        });
     }
     
     // Click outside modal to close
@@ -88,19 +116,40 @@ function setupDonationModalListeners() {
             }
         });
     }
+    
+    // ESC key to close
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && donationModal && donationModal.style.display === 'block') {
+            hideDonationPopup();
+        }
+    });
+}
+
+/**
+ * Force show donation popup (for testing)
+ */
+function forceShowDonationPopup() {
+    // Reset session storage
+    sessionStorage.removeItem('donationPopupShown');
+    localStorage.removeItem('donationPopupLastShown');
+    donationPopupShown = false;
+    
+    // Show immediately
+    showDonationPopup();
 }
 
 /**
  * Initialize donation popup on page load
  */
 document.addEventListener('DOMContentLoaded', () => {
-    initDonationPopup();
-    
-    // Note: Donation popup will be triggered by auth.js when user logs in
-    console.log('[Donation] Donation popup system ready');
+    // Wait a bit to ensure all scripts are loaded
+    setTimeout(() => {
+        initDonationPopup();
+    }, 500);
 });
 
 // Export functions for use in other scripts
 window.showDonationPopup = showDonationPopup;
 window.hideDonationPopup = hideDonationPopup;
-window.showDonationPopupOnLogin = showDonationPopupOnLogin; 
+window.showDonationPopupOnLogin = showDonationPopupOnLogin;
+window.forceShowDonationPopup = forceShowDonationPopup; // For testing 
