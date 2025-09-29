@@ -1,3 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+# Virtual environments
+venv/
+.venv/
+
+# OS files
+.DS_Store
+
+# IDE/editor
+.idea/
+.vscode/
+
+# Env/config
+.env
+
 # Environment variables
 .env
 .env.local
