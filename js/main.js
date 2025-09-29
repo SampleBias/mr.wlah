@@ -343,25 +343,27 @@ transformBtn.addEventListener('click', async () => {
     const text = inputText.value.trim();
     const tone = document.getElementById('tone').value;
     const preserveFont = document.getElementById('preserve-font')?.checked || true;
-    const selectedModeInput = document.querySelector('input[name="mode"]:checked');
-    const mode = selectedModeInput ? selectedModeInput.value : null;
-    
+    const selectedModeInput = null; // radio removed; dropdown will drive mode
+    const mode = (tone === 'emoji_summary' || tone === 'inverse_statement' || tone === 'fa_translate') ? tone : null;
+
     if (!text) {
         alert('Please enter or upload some text to transform.');
         return;
     }
-    
+
     // Calculate original word count
     const originalWordCount = text.split(/\s+/).filter(word => word.length > 0).length;
-    
+
     // Show loading state
     transformBtn.disabled = true;
     transformBtn.textContent = 'Transforming...';
     outputText.textContent = 'Applying humanizing transformations...';
-    
+
     try {
-        const transformedText = await transformTextWithGemini(text, tone, preserveFont, originalWordCount, mode);
-        
+        // If using an experimental mode, send a neutral tone to backend (ignored when mode set)
+        const effectiveTone = mode ? 'casual' : tone;
+        const transformedText = await transformTextWithGemini(text, effectiveTone, preserveFont, originalWordCount, mode);
+
         // If transformed text has HTML content, use innerHTML, otherwise use textContent
         if (/<[a-z][\s\S]*>/i.test(transformedText)) {
             outputText.innerHTML = transformedText;
