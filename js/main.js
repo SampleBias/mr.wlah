@@ -343,6 +343,8 @@ transformBtn.addEventListener('click', async () => {
     const text = inputText.value.trim();
     const tone = document.getElementById('tone').value;
     const preserveFont = document.getElementById('preserve-font')?.checked || true;
+    const selectedModeInput = document.querySelector('input[name="mode"]:checked');
+    const mode = selectedModeInput ? selectedModeInput.value : null;
     
     if (!text) {
         alert('Please enter or upload some text to transform.');
@@ -358,13 +360,22 @@ transformBtn.addEventListener('click', async () => {
     outputText.textContent = 'Applying humanizing transformations...';
     
     try {
-        const transformedText = await transformTextWithGemini(text, tone, preserveFont, originalWordCount);
+        const transformedText = await transformTextWithGemini(text, tone, preserveFont, originalWordCount, mode);
         
         // If transformed text has HTML content, use innerHTML, otherwise use textContent
         if (/<[a-z][\s\S]*>/i.test(transformedText)) {
             outputText.innerHTML = transformedText;
         } else {
             outputText.textContent = transformedText;
+        }
+
+        // Handle RTL for Farsi mode
+        if (mode === 'fa_translate') {
+            outputText.setAttribute('dir', 'rtl');
+            outputText.classList.add('rtl');
+        } else {
+            outputText.setAttribute('dir', 'ltr');
+            outputText.classList.remove('rtl');
         }
     } catch (error) {
         console.error('Error transforming text:', error);
@@ -376,7 +387,7 @@ transformBtn.addEventListener('click', async () => {
 });
 
 // Gemini API Call
-async function transformTextWithGemini(text, tone, preserveFont = true, targetWordCount = null) {
+async function transformTextWithGemini(text, tone, preserveFont = true, targetWordCount = null, mode = null) {
     // In a real implementation with a backend server, we would call the API endpoint
     try {
         const response = await fetch('/api/transform', {
@@ -388,7 +399,8 @@ async function transformTextWithGemini(text, tone, preserveFont = true, targetWo
                 text,
                 tone,
                 preserveFont,
-                targetWordCount
+                targetWordCount,
+                mode
             })
         });
         

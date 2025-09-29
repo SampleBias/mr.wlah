@@ -155,6 +155,36 @@ main {
     align-items: center;
 }
 
+/* Experimental Mode Selector */
+.mode-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mode-options {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.mode-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.badge-experimental {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 0.8rem;
+    color: var(--dark-bg);
+    background-color: var(--secondary-color);
+    border: 1px solid var(--secondary-color);
+    border-radius: 3px;
+}
+
 .tone-selector label {
     margin-right: 10px;
     font-size: 1.1rem;
@@ -266,6 +296,13 @@ select {
     word-wrap: break-word;
     white-space: pre-wrap;
     resize: none;
+}
+
+/* RTL support for Farsi output */
+.text-area-container .output.rtl {
+    direction: rtl;
+    text-align: right;
+    font-family: Tahoma, "IRANSans", "Vazirmatn", Arial, 'VT323', monospace;
 }
 
 /* Buttons */

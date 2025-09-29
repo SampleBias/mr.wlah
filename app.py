@@ -873,6 +873,7 @@ def transform_text():
                 tone = request.form.get('tone', 'casual')
                 preserve_font = request.form.get('preserveFont', 'true') == 'true'
                 target_word_count = request.form.get('targetWordCount')
+                mode = request.form.get('mode')
                 if target_word_count:
                     target_word_count = int(target_word_count)
             except Exception as e:
@@ -884,6 +885,7 @@ def transform_text():
             tone = data.get('tone', 'casual')
             preserve_font = data.get('preserveFont', True)
             target_word_count = data.get('targetWordCount')
+            mode = data.get('mode')
             
             if not text:
                 return jsonify({'error': 'No text or file provided'}), 400
@@ -894,7 +896,8 @@ def transform_text():
                 "tone": tone,
                 "text_length": len(text),
                 "preserve_font": preserve_font,
-                "target_word_count": target_word_count
+                "target_word_count": target_word_count,
+                "mode": mode
             }
             log_user_activity(user_id, "TRANSFORM_TEXT", log_details)
         
@@ -955,12 +958,50 @@ def transform_text():
                      The text should be expressive while maintaining clarity."""
         }
         
-        # Get tone-specific instructions, defaulting to casual if tone not recognized
-        tone_instruction = tone_instructions.get(tone.lower(), tone_instructions['casual'])
-        
-        # Create prompt for Gemini, including word count constraint if specified
-        if target_word_count:
-            prompt = f"""{tone_instruction}
+        # Experimental modes: override prompt if mode is provided
+        prompt = None
+        if mode in {"emoji_summary", "inverse_statement", "fa_translate"}:
+            if mode == "emoji_summary":
+                prompt = f"""
+Summarize the core idea of the following text using primarily emojis and ASCII symbols only.
+- Limit output to a maximum of 500 characters.
+- No explanations, no preface, no suffix; output only the emojis/characters.
+- You may use minimal punctuation or separators if needed.
+
+Text:
+{text}
+"""
+                # For emoji summary, font preservation is irrelevant
+                preserve_font = False
+            elif mode == "inverse_statement":
+                prompt = f"""
+Rewrite each declarative sentence from the text as its logical negation.
+- Preserve original tense and grammatical person.
+- Avoid double negatives (e.g., prefer "is not" over "isn't not").
+- Do not negate questions, commands, or quotations; leave quoted material unchanged.
+- Keep named entities as-is.
+- Output only the rewritten text with the same sentence order.
+
+Text:
+{text}
+"""
+                preserve_font = False
+            elif mode == "fa_translate":
+                prompt = f"""
+Translate the following text into Persian (Farsi) in a formal register.
+- Preserve numbers and named entities in Latin script.
+- Do not add explanations or the original text; output only the translation.
+- No transliteration of names.
+
+Text:
+{text}
+"""
+                preserve_font = False
+        else:
+            # Default behavior with tone instructions
+            tone_instruction = tone_instructions.get(tone.lower(), tone_instructions['casual'])
+            if target_word_count:
+                prompt = f"""{tone_instruction}
                      
                      {forbidden_instruction}
                      
@@ -974,8 +1015,8 @@ def transform_text():
                      \"Alright\", or similar words. Begin with substantive content directly.
                      
                      Text to transform: {text}"""
-        else:
-            prompt = f"""{tone_instruction}
+            else:
+                prompt = f"""{tone_instruction}
                      
                      {forbidden_instruction}
                      
@@ -997,9 +1038,15 @@ def transform_text():
         
         # Clean the LLM response to remove any prefacing or concluding meta-text
         transformed_text = clean_llm_response(transformed_text)
+
+        # Enforce 500-character cap for emoji summary
+        if mode == "emoji_summary" and transformed_text:
+            transformed_text = transformed_text.strip()
+            if len(transformed_text) > 500:
+                transformed_text = transformed_text[:500]
         
         # Apply original font style if preservation is requested
-        if preserve_font:
+        if preserve_font and (mode is None):
             transformed_text = apply_font_style(transformed_text, font_info)
         
         # Log the transformation if MongoDB is configured and user is authenticated
